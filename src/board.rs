@@ -19,6 +19,24 @@ use packed_simd::*;
  *  F = uncastled black rook
  */
 
+macro_rules! gen_line {
+    ( $val:ident, $op:tt, 0, 0, 0, 0 ) => {};
+    ( $val:ident, $op:tt, $($vec:expr),+ ) => {
+        $val $op u64x4::new($($vec),+);
+    };
+}
+
+macro_rules! get_piece {
+    ($name:ident, [ $($or_vec:expr),+ ], [ $($xor_vec:expr),+ ]) => {
+        pub fn $name(&self) -> u64 {
+            let mut vec = self.0;
+            gen_line!(vec, |=, $($or_vec),+);
+            gen_line!(vec, ^=, $($xor_vec),+);
+            vec.and()
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Board(u64x4);
 
@@ -63,27 +81,43 @@ impl Board {
         Board(u64x4::from_slice_aligned(&out[..]))
     }
 
-    pub fn get_rooks(&self) -> u64 {
-        let mut vec = self.0;
-        vec |= u64x4::new(0, 0, 0, u64::MAX);
-        vec.and()
-    }
+    get_piece!(pawns  , [u64::MAX, 0, 0, 0], [0, u64::MAX, u64::MAX, 0]);
+    get_piece!(knights, [u64::MAX, 0, 0, 0], [0, u64::MAX, 0, u64::MAX]);
+    get_piece!(bishops, [u64::MAX, 0, 0, 0], [0, u64::MAX, 0, 0]);
+    get_piece!(queens , [u64::MAX, 0, 0, 0], [0, 0, u64::MAX, u64::MAX]);
+    get_piece!(kings  , [u64::MAX, 0, 0, 0], [0, u64::MAX, 0, u64::MAX]);
 
-    pub fn get_occ(&self) -> u64 {
+    get_piece!(white_pawns  , [0, 0, 0, 0], [0, u64::MAX, u64::MAX, 0]);
+    get_piece!(white_knights, [0, 0, 0, 0], [0, u64::MAX, 0, u64::MAX]);
+    get_piece!(white_bishops, [0, 0, 0, 0], [0, u64::MAX, 0, 0]);
+    get_piece!(white_queens , [0, 0, 0, 0], [0, 0, u64::MAX, u64::MAX]);
+    get_piece!(white_kings  , [0, 0, 0, 0], [0, u64::MAX, 0, u64::MAX]);
+
+    get_piece!(black_pawns  , [0, 0, 0, 0], [u64::MAX, u64::MAX, u64::MAX, 0]);
+    get_piece!(black_knights, [0, 0, 0, 0], [u64::MAX, u64::MAX, 0, u64::MAX]);
+    get_piece!(black_bishops, [0, 0, 0, 0], [u64::MAX, u64::MAX, 0, 0]);
+    get_piece!(black_queens , [0, 0, 0, 0], [u64::MAX, 0, u64::MAX, u64::MAX]);
+    get_piece!(black_kings  , [0, 0, 0, 0], [u64::MAX, u64::MAX, 0, u64::MAX]);
+
+    get_piece!(rooks      , [u64::MAX, 0, 0, u64::MAX], [0, 0, 0, 0]);
+    get_piece!(white_rooks, [0, 0, 0, u64::MAX]       , [0, 0, 0, 0]);
+    get_piece!(black_rooks, [0, 0, 0, u64::MAX]       , [u64::MAX, 0, 0, 0]);
+
+    pub fn occ(&self) -> u64 {
         let mut vec = self.0;
         vec &= u64x4::new(0, u64::MAX, u64::MAX, u64::MAX);
         vec.or()
     }
 
-    pub fn get_black(&self) -> u64 {
+    pub fn black(&self) -> u64 {
         unsafe {
-            self.get_occ() & self.0.extract_unchecked(0)
+            self.occ() & self.0.extract_unchecked(0)
         }
     }
 
-    pub fn get_white(&self) -> u64 {
+    pub fn white(&self) -> u64 {
         unsafe {
-            self.get_occ() & !self.0.extract_unchecked(0)
+            self.occ() & !self.0.extract_unchecked(0)
         }
     }
 
