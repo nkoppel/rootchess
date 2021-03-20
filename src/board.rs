@@ -264,21 +264,21 @@ impl Board {
     get_piece!(queens , [M, 0, 0, 0], [0, 0, M, M]);
     get_piece!(kings  , [M, 0, 0, 0], [0, 0, M, 0]);
 
-    get_piece!(white_pawns  , [0, 0, 0, 0], [0, M, M, 0]);
-    get_piece!(white_knights, [0, 0, 0, 0], [0, M, 0, M]);
-    get_piece!(white_bishops, [0, 0, 0, 0], [0, M, 0, 0]);
-    get_piece!(white_queens , [0, 0, 0, 0], [0, 0, M, M]);
-    get_piece!(white_kings  , [0, 0, 0, 0], [0, 0, M, 0]);
+    get_piece!(white_pawns  , [0, 0, 0, 0], [M, M, M, 0]);
+    get_piece!(white_knights, [0, 0, 0, 0], [M, M, 0, M]);
+    get_piece!(white_bishops, [0, 0, 0, 0], [M, M, 0, 0]);
+    get_piece!(white_queens , [0, 0, 0, 0], [M, 0, M, M]);
+    get_piece!(white_kings  , [0, 0, 0, 0], [M, 0, M, 0]);
 
-    get_piece!(black_pawns  , [0, 0, 0, 0], [M, M, M, 0]);
-    get_piece!(black_knights, [0, 0, 0, 0], [M, M, 0, M]);
-    get_piece!(black_bishops, [0, 0, 0, 0], [M, M, 0, 0]);
-    get_piece!(black_queens , [0, 0, 0, 0], [M, 0, M, M]);
-    get_piece!(black_kings  , [0, 0, 0, 0], [M, M, 0, M]);
+    get_piece!(black_pawns  , [0, 0, 0, 0], [0, M, M, 0]);
+    get_piece!(black_knights, [0, 0, 0, 0], [0, M, 0, M]);
+    get_piece!(black_bishops, [0, 0, 0, 0], [0, M, 0, 0]);
+    get_piece!(black_queens , [0, 0, 0, 0], [0, 0, M, M]);
+    get_piece!(black_kings  , [0, 0, 0, 0], [0, 0, M, 0]);
 
     get_piece!(rooks      , [M, 0, 0, M], [0, 0, 0, 0]);
-    get_piece!(white_rooks, [0, 0, 0, M], [0, 0, 0, 0]);
-    get_piece!(black_rooks, [0, 0, 0, M], [M, 0, 0, 0]);
+    get_piece!(white_rooks, [0, 0, 0, M], [M, 0, 0, 0]);
+    get_piece!(black_rooks, [0, 0, 0, M], [0, 0, 0, 0]);
 
     get_piece!(castling_rooks      , [M, 0, 0, 0], [0, 0, 0, 0]);
     get_piece!(castling_white_rooks, [0, 0, 0, 0], [M, 0, 0, 0]);
