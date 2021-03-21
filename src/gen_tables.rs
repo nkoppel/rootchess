@@ -201,7 +201,7 @@ fn gen_occ_att(sq: usize, bishop: bool) -> Vec<(u64, u64)> {
 pub fn print_board(board: u64) {
     println!("{:#x}", board);
     for y in (0..8).rev() {
-        for x in 0..8 {
+        for x in (0..8).rev() {
             if board & (1 << (x + y * 8)) != 0 {
                 print!("X ");
             } else {
@@ -280,9 +280,7 @@ fn gen_move_table(deltas: &[(isize, isize)]) -> Vec<u64> {
 
 pub struct Tables {
     pub white_pawn_takes: Vec<u64>,
-    pub white_pawn_moves: Vec<u64>,
     pub black_pawn_takes: Vec<u64>,
-    pub black_pawn_moves: Vec<u64>,
     pub bishop: Vec<(u64, u64, u64)>,
     pub rook: Vec<(u64, u64, u64)>,
     pub knight: Vec<u64>,
@@ -290,16 +288,16 @@ pub struct Tables {
     pub magic: Vec<u64>,
 }
 
-pub fn new_tables() -> Tables {
-    Tables {
-        white_pawn_takes: gen_move_table(&vec![(-1, 1), (1, 1)]),
-        white_pawn_moves: gen_move_table(&vec![(0, 1)]),
-        black_pawn_takes: gen_move_table(&vec![(-1, -1), (1, -1)]),
-        black_pawn_moves: gen_move_table(&vec![(0, -1)]),
-        knight: gen_move_table(&vec![(1, 2), (-1, 2), (1, -2), (-1, -2), (2, 1), (-2, 1), (2, -1), (-2, -1)]),
-        king: gen_move_table(&vec![(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]),
-        bishop: gen_sliding_table(true),
-        rook: gen_sliding_table(false),
-        magic: gen_magic_table(),
+impl Tables {
+    pub fn new() -> Self {
+        Self {
+            white_pawn_takes: gen_move_table(&vec![(-1, 1), (1, 1)]),
+            black_pawn_takes: gen_move_table(&vec![(-1, -1), (1, -1)]),
+            knight: gen_move_table(&vec![(1, 2), (-1, 2), (1, -2), (-1, -2), (2, 1), (-2, 1), (2, -1), (-2, -1)]),
+            king: gen_move_table(&vec![(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]),
+            bishop: gen_sliding_table(true),
+            rook: gen_sliding_table(false),
+            magic: gen_magic_table(),
+        }
     }
 }

@@ -1,14 +1,17 @@
+#![feature(test)]
+extern crate test;
+
 mod gen_tables;
 mod board;
+mod gen_moves;
 
 use gen_tables::*;
 use board::*;
 
 fn main() {
-    println!("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3");
-
     let hasher = Hasher::new();
-    let board = Board::from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3", &hasher);
+    let board = Board::from_fen("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq -", &hasher);
+    let tables = Tables::new();
 
     let squares =  board.to_squarewise();
 
@@ -26,5 +29,11 @@ fn main() {
         }
         println!();
     }
+
+    for (sq, moves) in board.gen_moves_bits(&tables) {
+        println!("{}", sq);
+        print_board(moves);
+    }
+
     println!("{}", board.to_fen(false));
 }

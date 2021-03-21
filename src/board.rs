@@ -253,7 +253,11 @@ impl Board {
             }
         }
 
-        squares[sq_from_str(&words.next().unwrap())] = 8;
+        let word = words.next().unwrap();
+
+        if word != "-" {
+            squares[sq_from_str(&word)] = 8;
+        }
 
         Board::from_squarewise(&squares, black, hasher)
     }
@@ -364,6 +368,36 @@ impl Board {
             hash ^= hasher.black;
         }
 
-        self.hash ^= hash;
+        self.hash = prev.hash ^ hash;
+    }
+}
+
+mod tests {
+    use super::*;
+    use test::Bencher;
+
+    #[test]
+    fn t_hash() {
+        let hasher = Hasher::new();
+        let mut board1 = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -", &hasher);
+        let mut board2 = Board::from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3", &hasher);
+
+        let hash1 = board1.hash;
+        let hash2 = board2.hash;
+
+        board1.update_hash(&board2, &hasher);
+        board2.update_hash(&board1, &hasher);
+
+        assert_eq!(board1.hash, hash1);
+        assert_eq!(board2.hash, hash2);
+    }
+
+    #[test]
+    fn t_fen() {
+        let hasher = Hasher::new();
+        let board = Board::from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq -", &hasher);
+
+        assert_eq!(board, Board::from_fen(&board.to_fen(false), &hasher));
+        assert_eq!(board, Board::from_fen(&board.to_fen(true), &hasher));
     }
 }
