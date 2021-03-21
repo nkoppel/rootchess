@@ -43,6 +43,8 @@ macro_rules! get_piece {
 const M: u64 = u64::MAX;
 const FEN_PIECES: &str = "_PNBQKRR_pnbqkrr";
 pub const FILES: &str = "hgfedcba";
+pub const START_FEN: &str =
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 pub fn sq_from_str(s: &str) -> usize {
     let mut word = s.chars();
@@ -399,5 +401,30 @@ mod tests {
 
         assert_eq!(board, Board::from_fen(&board.to_fen(false), &hasher));
         assert_eq!(board, Board::from_fen(&board.to_fen(true), &hasher));
+    }
+
+    #[bench]
+    fn b_init_hash(b: &mut Bencher) {
+        let hasher = Hasher::new();
+        let mut board = Board::from_fen(START_FEN, &hasher);
+
+        b.iter(|| {
+            board.init_hash(&hasher);
+            board.hash
+        });
+    }
+
+    #[bench]
+    fn b_update_hash(b: &mut Bencher) {
+        let hasher = Hasher::new();
+        let mut board1 = Board::from_fen(START_FEN, &hasher);
+        let mut board2 = Board::from_fen(
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+        &hasher);
+
+        b.iter(|| {
+            board2.update_hash(&board1, &hasher);
+            board2.hash
+        });
     }
 }

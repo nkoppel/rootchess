@@ -1,9 +1,6 @@
 use crate::gen_tables::*;
 use crate::board::*;
 
-pub const START_FEN: &str =
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-
 fn gen_rook_moves(tables: &Tables, sq: usize, mut occ: u64) -> u64 {
     let (mask, magic, offset) = tables.rook[sq];
 
@@ -325,30 +322,5 @@ mod tests {
 
         board = Board::from_fen("8/8/8/8/8/2n5/8/K7 w - -", &hasher); 
         assert_eq!(board.get_blocks(&tables).1, u64::MAX);
-    }
-
-    #[bench]
-    fn b_init_hash(b: &mut Bencher) {
-        let hasher = Hasher::new();
-        let mut board = Board::from_fen(START_FEN, &hasher);
-
-        b.iter(|| {
-            board.init_hash(&hasher);
-            board.hash
-        });
-    }
-
-    #[bench]
-    fn b_update_hash(b: &mut Bencher) {
-        let hasher = Hasher::new();
-        let mut board1 = Board::from_fen(START_FEN, &hasher);
-        let mut board2 = Board::from_fen(
-            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
-        &hasher);
-
-        b.iter(|| {
-            board2.update_hash(&board1, &hasher);
-            board2.hash
-        });
     }
 }
