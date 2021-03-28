@@ -301,3 +301,8 @@ impl Tables {
         }
     }
 }
+
+lazy_static! {
+    pub static ref TABLES: Tables = Tables::new();
+}
+

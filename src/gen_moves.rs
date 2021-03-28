@@ -1,26 +1,28 @@
 use crate::gen_tables::*;
 use crate::board::*;
 
-fn gen_rook_moves(tables: &Tables, sq: usize, mut occ: u64) -> u64 {
-    let (mask, magic, offset) = tables.rook[sq];
+#[inline]
+fn gen_rook_moves(sq: usize, mut occ: u64) -> u64 {
+    let (mask, magic, offset) = TABLES.rook[sq];
 
     occ &= mask;
     occ = occ.overflowing_mul(magic).0;
     occ >>= 52;
     occ += offset;
 
-    tables.magic[occ as usize]
+    TABLES.magic[occ as usize]
 }
 
-fn gen_bishop_moves(tables: &Tables, sq: usize, mut occ: u64) -> u64 {
-    let (mask, magic, offset) = tables.bishop[sq];
+#[inline]
+fn gen_bishop_moves(sq: usize, mut occ: u64) -> u64 {
+    let (mask, magic, offset) = TABLES.bishop[sq];
 
     occ &= mask;
     occ = occ.overflowing_mul(magic).0;
     occ >>= 55;
     occ += offset;
 
-    tables.magic[occ as usize]
+    TABLES.magic[occ as usize]
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -31,246 +33,301 @@ pub enum Move {
     Promotion(u8, u8, u8), // piece, sq1, sq2
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Moves {
-    pub bits: Vec<(u8, u64)>,
-    pub others: Vec<Move>
+pub use Move::*;
+
+pub struct MoveGenerator {
+    board: Board,
+    pins: Vec<u64>,
+    cur_occ: u64,
+    opp_occ: u64,
+    cur_pawn_takes: &'static [u64],
+    opp_pawn_takes: &'static [u64],
+    checks: u64,
+    blocks: u64,
+    threatened: u64,
+    moves_bits: Vec<(u8, u64)>,
+    moves_special: Vec<Move>,
 }
 
-impl Board {
-    fn get_checks(&self, tables: &Tables) -> u64 {
-        let occ = self.occ();
-        let (cur_occ, opp_occ, pawn_takes) =
-            if self.black {
-                (self.black(), self.white(), &tables.black_pawn_takes)
-            } else {
-                (self.white(), self.black(), &tables.white_pawn_takes)
-            };
+impl MoveGenerator {
+    pub fn empty() -> Self {
+        Self {
+            board: Board::new(),
+            pins: vec![0; 64],
+            cur_occ: 0,
+            opp_occ: 0,
+            cur_pawn_takes: &TABLES.white_pawn_takes,
+            opp_pawn_takes: &TABLES.black_pawn_takes,
+            checks: 0,
+            blocks: 0,
+            threatened: 0,
+            moves_bits: Vec::with_capacity(16),
+            moves_special: Vec::with_capacity(40),
+        }
+    }
 
-        let king_loc = (self.kings() & cur_occ).trailing_zeros() as usize;
+    pub fn new(board: Board) -> Self {
+        let mut out = Self::empty();
+
+        out.set_board(board);
+        out
+    }
+
+    pub fn set_board(&mut self, board: Board) {
+        self.board = board;
+        if self.board.black {
+            self.cur_occ = self.board.black();
+            self.opp_occ = self.board.white();
+            self.cur_pawn_takes = &TABLES.black_pawn_takes;
+            self.opp_pawn_takes = &TABLES.white_pawn_takes;
+        } else {
+            self.cur_occ = self.board.white();
+            self.opp_occ = self.board.black();
+            self.cur_pawn_takes = &TABLES.white_pawn_takes;
+            self.opp_pawn_takes = &TABLES.black_pawn_takes;
+        }
+        self.set_threatened();
+        self.set_pins();
+        self.set_blocks();
+    }
+
+    fn get_threats(&self, sq: usize) -> u64 {
         let mut out = 0;
+        let occ = self.board.occ();
 
-        out |= pawn_takes[king_loc] & opp_occ & self.pawns();
-        out |= tables.knight[king_loc] & opp_occ & self.knights();
-        out |= gen_bishop_moves(tables, king_loc, occ) & opp_occ &
-            (self.bishops() | self.queens());
-        out |= gen_rook_moves(tables, king_loc, occ) & opp_occ &
-            (self.rooks() | self.queens());
+        out |= self.cur_pawn_takes[sq] & self.opp_occ & self.board.pawns();
+        out |= TABLES.knight[sq] & self.opp_occ & self.board.knights();
+        out |= gen_bishop_moves(sq, occ) & self.opp_occ &
+            (self.board.bishops() | self.board.queens());
+        out |= gen_rook_moves(sq, occ) & self.opp_occ &
+            (self.board.rooks() | self.board.queens());
 
         out
     }
 
-    fn get_threatened(&self, tables: &Tables) -> u64 {
+    fn set_threatened(&mut self) {
         let mut out = 0;
 
-        let (cur_occ, opp_occ, pawn_takes) =
-            if self.black {
-                (self.black(), self.white(), &tables.white_pawn_takes)
-            } else {
-                (self.white(), self.black(), &tables.black_pawn_takes)
-            };
-
-        let mut board = self.clone();
-        let king = self.kings() & cur_occ;
+        let mut board = self.board.clone();
+        let king = self.board.kings() & self.cur_occ;
         board.b &= !king;
 
         let occ = board.occ();
 
-        for sq in LocStack(board.pawns() & opp_occ) {
-            out |= pawn_takes[sq];
+        for sq in LocStack(board.pawns() & self.opp_occ) {
+            out |= self.opp_pawn_takes[sq];
         }
 
-        for sq in LocStack(board.knights() & opp_occ) {
-            out |= tables.knight[sq];
+        for sq in LocStack(board.knights() & self.opp_occ) {
+            out |= TABLES.knight[sq];
         }
 
-        for sq in LocStack(board.kings() & opp_occ) {
-            out |= tables.king[sq];
+        for sq in LocStack(board.kings() & self.opp_occ) {
+            out |= TABLES.king[sq];
         }
 
-        for sq in LocStack((board.bishops() | board.queens()) & opp_occ) {
-            out |= gen_bishop_moves(tables, sq, occ);
+        for sq in LocStack((board.bishops() | board.queens()) & self.opp_occ) {
+            out |= gen_bishop_moves(sq, occ);
         }
 
-        for sq in LocStack((board.rooks() | board.queens()) & opp_occ) {
-            out |= gen_rook_moves(tables, sq, occ);
+        for sq in LocStack((board.rooks() | board.queens()) & self.opp_occ) {
+            out |= gen_rook_moves(sq, occ);
         }
 
-        out
+        self.threatened = out
     }
 
-    fn get_pins(&self, tables: &Tables) -> Vec<u64> {
-        let occ = self.occ();
-        let (cur_occ, opp_occ, pawn_takes) =
-            if self.black {
-                (self.black(), self.white(), &tables.white_pawn_takes)
-            } else {
-                (self.white(), self.black(), &tables.black_pawn_takes)
-            };
+    fn set_pins(&mut self) {
+        let occ = self.board.occ();
 
-        let king_loc = (self.kings() & cur_occ).trailing_zeros() as usize;
-        let mut out = vec![u64::MAX; 64];
+        let king_loc = (self.board.kings() & self.cur_occ).trailing_zeros() as usize;
+        for p in self.pins.iter_mut() {
+            *p = u64::MAX;
+        }
 
-        let bishop = gen_bishop_moves(tables, king_loc, opp_occ);
-        let rook = gen_rook_moves(tables, king_loc, opp_occ);
+        let bishop = gen_bishop_moves(king_loc, self.opp_occ);
+        let rook = gen_rook_moves(king_loc, self.opp_occ);
 
-        for pin in LocStack(bishop & opp_occ & (self.bishops() | self.queens()))
+        for pin in LocStack(bishop & self.opp_occ & (self.board.bishops() | self.board.queens()))
         {
             let moves =
-                bishop & gen_bishop_moves(tables, pin, opp_occ) | (1 << pin);
+                bishop & gen_bishop_moves(pin, self.opp_occ) | (1 << pin);
 
-            if (moves & cur_occ).count_ones() == 1 {
-                out[pin] = moves;
+            let piece = moves & self.cur_occ;
+
+            if piece.count_ones() == 1 {
+                self.pins[piece.trailing_zeros() as usize] = moves;
             }
         }
 
-        for pin in LocStack(rook & opp_occ & (self.rooks() | self.queens()))
+        for pin in LocStack(rook & self.opp_occ & (self.board.rooks() | self.board.queens()))
         {
             let moves =
-                rook & gen_rook_moves(tables, pin, opp_occ) | (1 << pin);
+                rook & gen_rook_moves(pin, self.opp_occ) | (1 << pin);
 
-            if (moves & cur_occ).count_ones() == 1 {
-                out[pin] = moves;
+            let piece = moves & self.cur_occ;
+
+            if piece.count_ones() == 1 {
+                self.pins[piece.trailing_zeros() as usize] = moves;
             }
         }
-
-        out
     }
 
-    fn get_blocks(&self, tables: &Tables) -> (u64, u64) {
-        let occ = self.occ();
-        let (cur_occ, opp_occ) =
-            if self.black {
-                (self.black(), self.white())
-            } else {
-                (self.white(), self.black())
-            };
+    fn set_blocks(&mut self) {
+        let occ = self.board.occ();
 
-        let king_loc = (self.kings() & cur_occ).trailing_zeros() as usize;
-        let checks = self.get_checks(tables);
+        let king_loc = (self.board.kings() & self.cur_occ).trailing_zeros() as usize;
+        self.checks = self.get_threats(king_loc);
 
-        match checks.count_ones() {
-            0 => return (checks, u64::MAX),
+        match self.checks.count_ones() {
+            0 => {self.blocks = u64::MAX; return},
             1 => {},
-            _ => return (checks, 0)
+            _ => {self.blocks = 0; return},
         }
 
-        let check_loc = checks.trailing_zeros() as usize;
+        let check_loc = self.checks.trailing_zeros() as usize;
 
-        let rook = gen_rook_moves(tables, king_loc, occ);
+        let rook = gen_rook_moves(king_loc, occ);
 
-        if rook & checks != 0 {
-            return (checks,
-                gen_rook_moves(tables, check_loc, occ) & rook | checks);
+        if rook & self.checks != 0 {
+            self.blocks =
+                gen_rook_moves(check_loc, occ) & rook | self.checks;
+            return;
         }
 
-        let bishop = gen_bishop_moves(tables, king_loc, occ);
+        let bishop = gen_bishop_moves(king_loc, occ);
 
-        if bishop & checks != 0 {
-            return (checks,
-                gen_bishop_moves(tables, check_loc, occ) & bishop | checks);
+        if bishop & self.checks != 0 {
+            self.blocks =
+                gen_bishop_moves(check_loc, occ) & bishop | self.checks;
+            return;
         }
 
-        (checks, checks)
+        self.blocks = self.checks;
     }
 
-    pub fn gen_moves_bits(&self, tables: &Tables) -> Vec<(u8, u64)> {
-        let mut out = Vec::with_capacity(16);
+    pub fn gen_moves_bits(&mut self) {
+        self.moves_bits.clear();
 
-        let occ = self.occ();
-        let (cur_occ, opp_occ, pawn_shift, pawn_mask1, pawn_mask2, pawn_takes) =
-            if self.black {
-                (self.black(), self.white(),
-                    Box::new(|x| x >> 8) as Box<dyn Fn(u64) -> u64>,
-                    0xffff000000000000, 0xffffffffffff0000,
-                    &tables.black_pawn_takes)
+        let occ = self.board.occ();
+        let (pawn_shift, pawn_mask1) =
+            if self.board.black {
+                (Box::new(|x| x >> 8) as Box<dyn Fn(u64) -> u64>,
+                    0xffff000000000000)
             } else {
-                (self.white(), self.black(),
-                    Box::new(|x| x << 8) as Box<dyn Fn(u64) -> u64>,
-                    0x000000000000ffff, 0x0000ffffffffffff,
-                    &tables.white_pawn_takes)
+                (Box::new(|x| x << 8) as Box<dyn Fn(u64) -> u64>,
+                    0x000000000000ffff)
             };
 
-        let threats = self.get_threatened(tables);
-        let (checks, blocks) = self.get_blocks(tables);
-        let pins = self.get_pins(tables);
+        let pawn_mask2 = 0x0000ffffffff0000;
 
-        for sq in LocStack(self.kings() & cur_occ) {
-            out.push((sq as u8, tables.king[sq] & !cur_occ & !threats));
+        for sq in LocStack(self.board.kings() & self.cur_occ) {
+            self.moves_bits.push((sq as u8, TABLES.king[sq] & !self.cur_occ & !self.threatened));
         }
 
-        if checks.count_ones() > 1 {
-            return out;
+        if self.checks.count_ones() > 1 {
+            return;
         }
 
-        for sq in LocStack(self.pawns() & cur_occ & pawn_mask1) {
+        for sq in LocStack(self.board.pawns() & self.cur_occ & pawn_mask1) {
             let mut moves;
 
             moves = pawn_shift(1 << sq) & !occ;
             moves |= pawn_shift(moves);
             moves &= !occ;
 
-            moves |= pawn_takes[sq] & (opp_occ | self.takeable_empties());
+            moves |= self.cur_pawn_takes[sq] & (self.opp_occ | self.board.takeable_empties());
 
-            moves &= blocks;
-            moves &= pins[sq];
+            moves &= self.blocks;
+            moves &= self.pins[sq];
 
-            out.push((sq as u8, moves));
+            self.moves_bits.push((sq as u8, moves));
         }
 
-        for sq in LocStack(self.pawns() & cur_occ & pawn_mask2) {
+        for sq in LocStack(self.board.pawns() & self.cur_occ & pawn_mask2) {
             let mut moves = pawn_shift(1 << sq) & !occ;
-            moves |= pawn_takes[sq] & opp_occ;
+            moves |= self.cur_pawn_takes[sq] & self.opp_occ;
 
-            moves &= blocks;
-            moves &= pins[sq];
+            moves &= self.blocks;
+            moves &= self.pins[sq];
 
-            out.push((sq as u8, moves));
+            self.moves_bits.push((sq as u8, moves));
         }
 
-        for sq in LocStack(self.knights() & cur_occ) {
-            let mut moves = tables.knight[sq] & !cur_occ;
+        for sq in LocStack(self.board.knights() & self.cur_occ) {
+            let mut moves = TABLES.knight[sq] & !self.cur_occ;
 
-            moves &= blocks;
-            moves &= pins[sq];
+            moves &= self.blocks;
+            moves &= self.pins[sq];
 
-            out.push((sq as u8, moves));
+            self.moves_bits.push((sq as u8, moves));
         }
 
-        for sq in LocStack(self.bishops() & cur_occ) {
-            let mut moves = gen_bishop_moves(tables, sq, occ) & !cur_occ;
+        for sq in LocStack(self.board.bishops() & self.cur_occ) {
+            let mut moves = gen_bishop_moves(sq, occ) & !self.cur_occ;
 
-            moves &= blocks;
-            moves &= pins[sq];
+            moves &= self.blocks;
+            moves &= self.pins[sq];
 
-            out.push((sq as u8, moves));
+            self.moves_bits.push((sq as u8, moves));
         }
 
-        for sq in LocStack(self.rooks() & cur_occ) {
-            let mut moves = gen_rook_moves(tables, sq, occ) & !cur_occ;
+        for sq in LocStack(self.board.rooks() & self.cur_occ) {
+            let mut moves = gen_rook_moves(sq, occ) & !self.cur_occ;
 
-            moves &= blocks;
-            moves &= pins[sq];
+            moves &= self.blocks;
+            moves &= self.pins[sq];
 
-            out.push((sq as u8, moves));
+            self.moves_bits.push((sq as u8, moves));
         }
 
-        for sq in LocStack(self.queens() & cur_occ) {
+        for sq in LocStack(self.board.queens() & self.cur_occ) {
             let mut moves = 0;
 
-            moves |= gen_bishop_moves(tables, sq, occ);
-            moves |= gen_rook_moves(tables, sq, occ);
-            moves &= !cur_occ;
+            moves |= gen_bishop_moves(sq, occ);
+            moves |= gen_rook_moves(sq, occ);
+            moves &= !self.cur_occ;
 
-            moves &= blocks;
-            moves &= pins[sq];
+            moves &= self.blocks;
+            moves &= self.pins[sq];
 
-            out.push((sq as u8, moves));
+            self.moves_bits.push((sq as u8, moves));
         }
 
-        out.retain(|(_, x)| *x != 0);
+        self.moves_bits.retain(|(_, x)| *x != 0);
+    }
 
-        out
+    pub fn gen_moves_special(&mut self) {
+        let occ = self.board.occ();
+
+        self.moves_special.clear();
+
+        let (pawn_shift, pawn_mask) =
+            if self.board.black {
+                (Box::new(|x| x >> 8) as Box<dyn Fn(u64) -> u64>,
+                    0x000000000000ff00)
+            } else {
+                (Box::new(|x| x << 8) as Box<dyn Fn(u64) -> u64>,
+                    0x00ff000000000000)
+            };
+
+        let piece_black = (self.board.black as u8) << 3;
+
+        for sq in LocStack(self.board.pawns() & self.cur_occ & pawn_mask) {
+            let mut moves = pawn_shift(1 << sq) & !occ;
+            moves |= self.cur_pawn_takes[sq] & self.opp_occ;
+
+            moves &= self.blocks;
+            moves &= self.pins[sq];
+
+            for sq2 in LocStack(moves) {
+                self.moves_special.push(Promotion(piece_black | 4, sq as u8, sq2 as u8));
+                self.moves_special.push(Promotion(piece_black | 6, sq as u8, sq2 as u8));
+                self.moves_special.push(Promotion(piece_black | 3, sq as u8, sq2 as u8));
+                self.moves_special.push(Promotion(piece_black | 2, sq as u8, sq2 as u8));
+            }
+        }
+
     }
 }
 
@@ -279,48 +336,118 @@ mod tests {
     use test::Bencher;
 
     #[test]
-    fn t_get_checks() {
-        let tables = Tables::new();
-        let hasher = Hasher::new();
-        let mut board1 = Board::from_fen(
-            "r7/q7/8/8/8/1nb5/2n5/K1P4r w - -",
-        &hasher);
+    fn t_get_threats() {
+        let mut generator = MoveGenerator::new(Board::from_fen("r7/q7/8/8/8/1nb5/2n5/K1P4r w - -"));
 
-        assert_eq!(board1.get_checks(&tables), 0x0080000000602000);
+        assert_eq!(generator.checks, 0x0080000000602000);
     }
 
     #[test]
     fn t_get_threatened() {
-        let tables = Tables::new();
-        let hasher = Hasher::new();
-        let mut board1 = Board::from_fen(
-            "8/b5k1/8/3q1p2/8/1P1n1K2/8/7r w - -",
-        &hasher);
+        let mut generator = MoveGenerator::new(Board::from_fen("8/b5k1/8/3q1p2/8/1P1n1K2/8/7r w - -"));
 
-        assert_eq!(board1.get_threatened(&tables), 0xd7557fed7f5d47ff);
+        assert_eq!(generator.threatened, 0xd7557fed7f5d47ff);
     }
 
     #[test]
     fn t_get_blocks() {
+        let mut generator = MoveGenerator::empty();
+
+        generator.set_board(Board::from_fen("8/8/8/8/8/2b5/8/K7 w - -")); 
+        assert_eq!(generator.blocks, 0x204000);
+
+        generator.set_board(Board::from_fen("8/8/r7/8/8/8/8/K7 w - -")); 
+        assert_eq!(generator.blocks, 0x0000808080808000);
+
+        generator.set_board(Board::from_fen("8/8/r7/8/8/2b5/8/K7 w - -")); 
+        assert_eq!(generator.blocks, 0);
+
+        generator.set_board(Board::from_fen("8/8/8/8/8/1n6/8/K7 w - -")); 
+        assert_eq!(generator.blocks, 0x400000);
+
+        generator.set_board(Board::from_fen("8/8/8/8/8/8/1p6/K7 w - -")); 
+        assert_eq!(generator.blocks, 0x4000);
+
+        generator.set_board(Board::from_fen("8/8/8/8/8/2n5/8/K7 w - -")); 
+        assert_eq!(generator.blocks, u64::MAX);
+    }
+
+    #[test]
+    fn t_get_pins() {
+        let mut generator = MoveGenerator::new(Board::from_fen("r7/6b1/8/8/8/2P5/P7/KPP4q w - -"));
+        let mut res = vec![u64::MAX; 64];
+
+        res[15] = 0x8080808080808000;
+        res[21] = 0x0002040810204000;
+        generator.set_pins();
+        assert_eq!(generator.pins, res);
+    }
+
+    #[test]
+    fn t_gen_moves_bits() {
         let tables = Tables::new();
-        let hasher = Hasher::new();
+        let mut generator = MoveGenerator::empty();
+        let mut moves;
+        let mut expected;
 
-        let mut board = Board::from_fen("8/8/8/8/8/2b5/8/K7 w - -", &hasher); 
-        assert_eq!(board.get_blocks(&tables).1, 0x204000);
+        generator.set_board(Board::from_fen("8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/6P1/5P2 w - -"));
+        generator.gen_moves_bits();
+        moves = generator.moves_bits;
+        moves.sort();
+        expected = [(2, 0x40400), (9, 0x2030000), (19, 0x1402002010), (29, 0x2048850df70a820), (33, 0x30505000000), (37, 0x88500050800000), (42, 0xc000000000000), (52, 0x10e8101010101010)];
+        // print!("[");
+        for i in 0..moves.len() {
+            // print!("({}, 0x{:x}), ", sq, mov);
+            println!("{}", moves[i].0);
+            print_board(moves[i].1);
+            assert_eq!(moves[i], expected[i]);
+        }
+        // println!("]");
+        // panic!();
+    }
 
-        board = Board::from_fen("8/8/r7/8/8/8/8/K7 w - -", &hasher); 
-        assert_eq!(board.get_blocks(&tables).1, 0x0000808080808000);
+    #[bench]
+    fn b_get_threats(b: &mut Bencher) {
+        let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
+        let king_loc = 4;
 
-        board = Board::from_fen("8/8/r7/8/8/2b5/8/K7 w - -", &hasher); 
-        assert_eq!(board.get_blocks(&tables).1, 0);
+        b.iter(|| test::black_box(&generator).get_threats(king_loc));
+    }
 
-        board = Board::from_fen("8/8/8/8/8/1n6/8/K7 w - -", &hasher); 
-        assert_eq!(board.get_blocks(&tables).1, 0x400000);
+    #[bench]
+    fn b_set_threatened(b: &mut Bencher) {
+        let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
 
-        board = Board::from_fen("8/8/8/8/8/8/1p6/K7 w - -", &hasher); 
-        assert_eq!(board.get_blocks(&tables).1, 0x4000);
+        b.iter(|| {
+            test::black_box(&mut generator).set_threatened();
+        });
+    }
 
-        board = Board::from_fen("8/8/8/8/8/2n5/8/K7 w - -", &hasher); 
-        assert_eq!(board.get_blocks(&tables).1, u64::MAX);
+    #[bench]
+    fn b_set_pins(b: &mut Bencher) {
+        let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
+        // let mut generator = MoveGenerator::new(Board::from_fen("r7/6b1/8/8/8/2P5/P7/KPP4q w - -"));
+
+        b.iter(|| {
+            test::black_box(&mut generator).set_pins();
+        });
+    }
+
+    #[bench]
+    fn b_set_blocks(b: &mut Bencher) {
+        let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
+        // generator.board = Board::from_fen("r7/6b1/8/8/8/2P5/P7/KPP4q w - -");
+
+        b.iter(|| {
+            test::black_box(&mut generator).set_blocks();
+        });
+    }
+
+    #[bench]
+    fn b_set_board(b: &mut Bencher) {
+        let mut generator = MoveGenerator::empty();
+        let board = Board::from_fen(START_FEN);
+
+        b.iter(|| generator.set_board(test::black_box(board.clone())));
     }
 }

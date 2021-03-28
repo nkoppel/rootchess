@@ -65,6 +65,15 @@ pub fn str_from_sq(sq: usize) -> String {
     out
 }
 
+pub fn piece_to_sq(piece: u8) -> u64x4 {
+    let mut vec = u64x4::splat(piece as u64);
+
+    vec >>= u64x4::new(3, 2, 1, 0);
+    vec &= 1;
+
+    vec
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Board{
     pub b: u64x4,
@@ -73,6 +82,14 @@ pub struct Board{
 }
 
 impl Board {
+    pub fn new() -> Self {
+        Self {
+            b: u64x4::splat(0),
+            black: false,
+            hash: 0
+        }
+    }
+
     pub fn get_piece(&self, piece: u8) -> u64 {
         let mut vec = u64x4::splat(piece as u64);
 
@@ -104,7 +121,7 @@ impl Board {
         out
     }
 
-    pub fn from_squarewise(squares: &[u8], black: bool, hasher: &Hasher)
+    pub fn from_squarewise(squares: &[u8], black: bool)
         -> Self
     {
         let mut out = vec![0; 4];
@@ -121,7 +138,7 @@ impl Board {
             hash: 0
         };
 
-        out.init_hash(hasher);
+        out.init_hash();
         out
     }
 
@@ -201,7 +218,7 @@ impl Board {
         out
     }
 
-    pub fn from_fen(fen: &str, hasher: &Hasher) -> Self {
+    pub fn from_fen(fen: &str) -> Self {
         let mut squares = vec![0u8; 64];
         let mut words = fen.split(' ');
 
@@ -261,7 +278,12 @@ impl Board {
             squares[sq_from_str(&word)] = 8;
         }
 
-        Board::from_squarewise(&squares, black, hasher)
+        Board::from_squarewise(&squares, black)
+    }
+
+    pub fn invert(&mut self) {
+        self.b ^= u64x4::new(self.occ(), 0, 0, 0);
+        self.black = !self.black;
     }
 
     get_piece!(pawns  , [M, 0, 0, 0], [0, M, M, 0]);
@@ -320,6 +342,10 @@ pub struct Hasher {
     black: u64,
 }
 
+lazy_static! {
+    pub static ref HASHER: Hasher = Hasher::new();
+}
+
 use rand::{Rng, thread_rng};
 
 impl Hasher {
@@ -353,21 +379,21 @@ impl Hasher {
 }
 
 impl Board {
-    pub fn init_hash(&mut self, hasher: &Hasher) {
-        let mut hash = hasher.hash_bits(self.b);
+    pub fn init_hash(&mut self) {
+        let mut hash = HASHER.hash_bits(self.b);
 
         if self.black {
-            hash ^= hasher.black;
+            hash ^= HASHER.black;
         }
 
         self.hash = hash;
     }
 
-    pub fn update_hash(&mut self, prev: &Board, hasher: &Hasher) {
-        let mut hash = hasher.hash_bits(self.b ^ prev.b);
+    pub fn update_hash(&mut self, prev: &Board) {
+        let mut hash = HASHER.hash_bits(self.b ^ prev.b);
 
         if self.black != prev.black {
-            hash ^= hasher.black;
+            hash ^= HASHER.black;
         }
 
         self.hash = prev.hash ^ hash;
@@ -380,15 +406,14 @@ mod tests {
 
     #[test]
     fn t_hash() {
-        let hasher = Hasher::new();
-        let mut board1 = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -", &hasher);
-        let mut board2 = Board::from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3", &hasher);
+        let mut board1 = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -");
+        let mut board2 = Board::from_fen("rnbqkbnr/pppppppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKBNR b KQkq e3");
 
         let hash1 = board1.hash;
         let hash2 = board2.hash;
 
-        board1.update_hash(&board2, &hasher);
-        board2.update_hash(&board1, &hasher);
+        board1.update_hash(&board2);
+        board2.update_hash(&board1);
 
         assert_eq!(board1.hash, hash1);
         assert_eq!(board2.hash, hash2);
@@ -396,34 +421,31 @@ mod tests {
 
     #[test]
     fn t_fen() {
-        let hasher = Hasher::new();
-        let board = Board::from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq -", &hasher);
+        let board = Board::from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq -");
 
-        assert_eq!(board, Board::from_fen(&board.to_fen(false), &hasher));
-        assert_eq!(board, Board::from_fen(&board.to_fen(true), &hasher));
+        assert_eq!(board, Board::from_fen(&board.to_fen(false)));
+        assert_eq!(board, Board::from_fen(&board.to_fen(true)));
     }
 
     #[bench]
     fn b_init_hash(b: &mut Bencher) {
-        let hasher = Hasher::new();
-        let mut board = Board::from_fen(START_FEN, &hasher);
+        let mut board = Board::from_fen(START_FEN);
 
         b.iter(|| {
-            board.init_hash(&hasher);
+            board.init_hash();
             board.hash
         });
     }
 
     #[bench]
     fn b_update_hash(b: &mut Bencher) {
-        let hasher = Hasher::new();
-        let mut board1 = Board::from_fen(START_FEN, &hasher);
+        let mut board1 = Board::from_fen(START_FEN);
         let mut board2 = Board::from_fen(
             "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
-        &hasher);
+        );
 
         b.iter(|| {
-            board2.update_hash(&board1, &hasher);
+            board2.update_hash(&board1);
             board2.hash
         });
     }
