@@ -1,6 +1,5 @@
 use crate::gen_tables::*;
-use packed_simd::*;
-use packed_simd::*;
+pub use packed_simd::*;
 
 macro_rules! gen_line {
     ( $val:ident, $op:tt, 0, 0, 0, 0 ) => {};
@@ -40,7 +39,6 @@ macro_rules! get_piece {
  *  F = uncastled black rook
  */
 
-const M: u64 = u64::MAX;
 const FEN_PIECES: &str = "_PNBQKRR_pnbqkrr";
 pub const FILES: &str = "hgfedcba";
 pub const START_FEN: &str =
@@ -65,16 +63,7 @@ pub fn str_from_sq(sq: usize) -> String {
     out
 }
 
-pub fn piece_to_sq(piece: u8) -> u64x4 {
-    let mut vec = u64x4::splat(piece as u64);
-
-    vec >>= u64x4::new(3, 2, 1, 0);
-    vec &= 1;
-
-    vec
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Board{
     pub b: u64x4,
     pub black: bool,
@@ -397,6 +386,28 @@ impl Board {
         }
 
         self.hash = prev.hash ^ hash;
+    }
+}
+
+use std::fmt;
+
+const DEBUG_CHARS: &str = "_PNBQKRCTpnbqkrc";
+
+impl fmt::Debug for Board {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let squares = self.to_squarewise();
+
+        writeln!(f, "{} 0x{:016x}", self.black, self.hash)?;
+
+        for y in (0..8).rev() {
+            for x in (0..8).rev() {
+                let sq = squares[x + y * 8] as usize;
+
+                write!(f, "{} ", &DEBUG_CHARS[sq..sq + 1])?;
+            }
+            writeln!(f)?;
+        }
+        Ok(())
     }
 }
 

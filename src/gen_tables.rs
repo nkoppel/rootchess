@@ -1,3 +1,7 @@
+use packed_simd::*;
+
+pub const M: u64 = u64::MAX;
+
 const BISHOP_MAGICS: [u64; 64] =
 [
     0x007bfeffbfeffbff, 0x003effbfeffbfe08, 0x0000401020200000, 0x0000200810000000, 0x0000110080000000, 0x0000080100800000, 0x0007efe0bfff8000, 0x00000fb0203fff80,
@@ -212,6 +216,98 @@ pub fn print_board(board: u64) {
     }
 }
 
+pub fn piece_to_sq(piece: u8) -> u64x4 {
+    let mut vec = u64x4::splat(piece as u64);
+
+    vec >>= u64x4::new(3, 2, 1, 0);
+    vec &= 1;
+
+    vec
+}
+
+pub fn abs_diff(a: usize, b: usize) -> usize {
+    if a > b {
+        a - b
+    } else {
+        b - a
+    }
+}
+
+fn gen_ep_table() -> Vec<Vec<u64x4>> {
+    let te = piece_to_sq(8);
+    let wp = piece_to_sq(1);
+    let bp = piece_to_sq(9);
+
+    vec![
+        vec![
+            wp << 32 | bp << 31 | (wp ^ te) << 39,
+            wp << 32 | bp << 33 | (wp ^ te) << 41
+        ],
+        vec![
+            bp << 24 | wp << 25 | (bp ^ te) << 17,
+            bp << 24 | wp << 23 | (bp ^ te) << 15
+        ]
+    ]
+}
+
+fn gen_castle_table() -> Vec<Vec<Vec<(u64, u64, u64x4)>>> {
+    let king = piece_to_sq(13);
+    let rook = piece_to_sq(14);
+    let rook_castle = piece_to_sq(15);
+    let mut white1 = Vec::new();
+    let mut black1 = Vec::new();
+
+    for ksq in 0..8 {
+        let mut white2 = Vec::new();
+        let mut black2 = Vec::new();
+
+        for rsq in 0..8 {
+            let (mut threat, mut empty, mut diff) = (0, 0, u64x4::splat(0));
+
+            if ksq > rsq {
+                threat = ((1 << abs_diff(ksq, 1) + 1) - 1) << ksq.min(1);
+
+                empty =  ((1 << abs_diff(ksq, 1)) - 1) << (ksq + 1).min(1);
+                empty |= ((1 << abs_diff(rsq, 2)) - 1) << (rsq + 1).min(2);
+                empty &= !(1 << ksq);
+                empty &= !(1 << rsq);
+
+                diff |= king << ksq as u32;
+                diff |= rook_castle << rsq as u32;
+                diff ^= king << 1;
+                diff ^= rook << 2;
+            } else if ksq < rsq {
+                threat = ((1 << abs_diff(ksq, 5) + 1) - 1) << ksq.min(5);
+
+                empty =  ((1 << abs_diff(ksq, 5)) - 1) << (ksq + 1).min(5);
+                empty |= ((1 << abs_diff(rsq, 4)) - 1) << (rsq + 1).min(4);
+                empty &= !(1 << ksq);
+                empty &= !(1 << rsq);
+
+                diff |= king << ksq as u32;
+                diff |= rook_castle << rsq as u32;
+                diff ^= king << 5;
+                diff ^= rook << 4;
+            }
+
+            let whitediff = diff & u64x4::new(0, M, M, M);
+
+            // use crate::board::*;
+            // println!("K:{} R:{}", ksq, rsq);
+            // println!("{:08b} {:08b} {:?}", threat, empty,
+                // Board{b: whitediff, black: false, hash: 0});
+
+            white2.push((threat, empty, whitediff));
+            black2.push((threat << 56, empty << 56, diff << 56));
+        }
+
+        white1.push(white2);
+        black1.push(black2);
+    }
+
+    vec![white1, black1]
+}
+
 fn gen_sliding_table(bishop: bool) -> Vec<(u64, u64, u64)> {
     let masks = gen_masks(bishop);
     let mut out = Vec::new();
@@ -286,6 +382,8 @@ pub struct Tables {
     pub knight: Vec<u64>,
     pub king: Vec<u64>,
     pub magic: Vec<u64>,
+    pub castles: Vec<Vec<Vec<(u64, u64, u64x4)>>>,
+    pub en_pass: Vec<Vec<u64x4>>,
 }
 
 impl Tables {
@@ -298,6 +396,8 @@ impl Tables {
             bishop: gen_sliding_table(true),
             rook: gen_sliding_table(false),
             magic: gen_magic_table(),
+            castles: gen_castle_table(),
+            en_pass: gen_ep_table(),
         }
     }
 }
@@ -305,4 +405,3 @@ impl Tables {
 lazy_static! {
     pub static ref TABLES: Tables = Tables::new();
 }
-
