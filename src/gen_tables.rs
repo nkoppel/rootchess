@@ -244,8 +244,8 @@ fn gen_ep_table() -> Vec<Vec<u64x4>> {
             wp << 32 | bp << 33 | (wp ^ te) << 41
         ],
         vec![
-            bp << 24 | wp << 25 | (bp ^ te) << 17,
-            bp << 24 | wp << 23 | (bp ^ te) << 15
+            bp << 24 | wp << 23 | (bp ^ te) << 15,
+            bp << 24 | wp << 25 | (bp ^ te) << 17
         ]
     ]
 }

@@ -39,7 +39,7 @@ macro_rules! get_piece {
  *  F = uncastled black rook
  */
 
-const FEN_PIECES: &str = "_PNBQKRR_pnbqkrr";
+pub const FEN_PIECES: &str = "_PNBQKRR_pnbqkrr";
 pub const FILES: &str = "hgfedcba";
 pub const START_FEN: &str =
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -58,7 +58,7 @@ pub fn str_from_sq(sq: usize) -> String {
     let file = sq % 8;
 
     out += &FILES[file..file + 1];
-    out += &format!("{}", sq / 8);
+    out += &format!("{}", sq / 8 + 1);
 
     out
 }
@@ -270,11 +270,6 @@ impl Board {
         Board::from_squarewise(&squares, black)
     }
 
-    pub fn invert(&mut self) {
-        self.b ^= u64x4::new(self.occ(), 0, 0, 0);
-        self.black = !self.black;
-    }
-
     get_piece!(pawns  , [M, 0, 0, 0], [0, M, M, 0]);
     get_piece!(knights, [M, 0, 0, 0], [0, M, 0, M]);
     get_piece!(bishops, [M, 0, 0, 0], [0, M, 0, 0]);
@@ -390,6 +385,7 @@ impl Board {
 }
 
 use std::fmt;
+use std::str::FromStr;
 
 const DEBUG_CHARS: &str = "_PNBQKRCTpnbqkrc";
 
@@ -408,6 +404,14 @@ impl fmt::Debug for Board {
             writeln!(f)?;
         }
         Ok(())
+    }
+}
+
+impl FromStr for Board {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Board::from_fen(s))
     }
 }
 
@@ -456,7 +460,7 @@ mod tests {
         );
 
         b.iter(|| {
-            board2.update_hash(&board1);
+            board2.update_hash(test::black_box(&board1));
             board2.hash
         });
     }
