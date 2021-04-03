@@ -28,12 +28,11 @@ fn main() {
     // board = board.do_move("b4a3".parse().unwrap());
     // println!("{:?}", board);
 
-    // let mut moves = Vec::new();
     // let generator = MoveGenerator::new(board2);
 
-    // generator.gen_moves(|b| {moves.push(b); false});
+    // generator.gen_moves();
 
-    // assert!(moves.contains(&board));
+    // assert!(generator.moves.contains(&board));
 }
 
 use std::env;
@@ -49,17 +48,17 @@ fn perftree() {
         }
     }
 
-    let generator = MoveGenerator::new(board.clone());
+    let mut generator = MoveGenerator::new(board.clone());
     let mut total = 0;
 
-    generator.gen_moves(|b| {
+    generator.gen_moves();
+
+    for b in generator.moves.clone() {
         let res = perft(b.clone(), depth - 1);
 
         println!("{} {}", board.get_move(&b, false), res);
         total += res;
-
-        false
-    });
+    }
 
     println!();
     println!("{}", total);

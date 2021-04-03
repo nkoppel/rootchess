@@ -1,5 +1,6 @@
 use crate::gen_tables::*;
 use crate::board::*;
+use crate::moves::*;
 
 #[inline]
 fn gen_rook_moves(sq: usize, mut occ: u64) -> u64 {
@@ -25,24 +26,6 @@ fn gen_bishop_moves(sq: usize, mut occ: u64) -> u64 {
     TABLES.magic[occ as usize]
 }
 
-macro_rules! do_moves {
-    ($board:expr, $sq:expr, $moves:expr, $f:ident) => {
-        for sq2 in LocStack($moves) {
-            let mut board2 = $board.clone();
-
-            board2.b &= !(1 << $sq | 1 << sq2);
-            board2.b |= ($board.b >> ($sq as u32) & 1) << (sq2 as u32);
-            board2.black ^= true;
-            board2.remove_takeable_empty();
-            board2.update_hash(&$board);
-
-            if $f(board2) {
-                return;
-            }
-        }
-    }
-}
-
 pub struct MoveGenerator {
     board: Board,
     pins: Vec<u64>,
@@ -53,6 +36,7 @@ pub struct MoveGenerator {
     checks: u64,
     blocks: u64,
     threatened: u64,
+    pub moves: Vec<Board>
 }
 
 impl MoveGenerator {
@@ -67,6 +51,7 @@ impl MoveGenerator {
             checks: 0,
             blocks: 0,
             threatened: 0,
+            moves: Vec::new()
         }
     }
 
@@ -222,10 +207,26 @@ impl MoveGenerator {
 
         self.blocks = self.checks;
     }
+}
 
-    pub fn gen_moves<F>(&self, mut f: F)
-        where F: FnMut(Board) -> bool
-    {
+fn do_moves(out: &mut Vec<Board>, board: &Board, sq: usize, moves: u64) {
+    for sq2 in LocStack(moves) {
+        let mut board2 = board.clone();
+
+        board2.b &= !(1 << sq | 1 << sq2);
+        board2.b |= (board.b >> (sq as u32) & 1) << (sq2 as u32);
+        board2.black ^= true;
+        board2.remove_takeable_empty();
+        board2.update_hash(&board);
+
+        out.push(board2);
+    }
+}
+
+impl MoveGenerator {
+    pub fn gen_moves(&mut self) {
+        self.moves.clear();
+
         let occ = self.board.occ();
         let (pawn_shift, pawn_mask1) =
             if self.board.black {
@@ -250,7 +251,7 @@ impl MoveGenerator {
         board.b ^= u64x4::new(0,0,0,board.castling_rooks() & self.cur_occ);
         board.update_hash(&self.board);
 
-        do_moves!(board, kingloc, moves, f);
+        do_moves(&mut self.moves, &board, kingloc, moves);
 
         if self.checks.count_ones() > 1 {
             return;
@@ -269,9 +270,7 @@ impl MoveGenerator {
                 board.remove_takeable_empty();
                 board.update_hash(&self.board);
 
-                if f(board) {
-                    return;
-                }
+                self.moves.push(board);
             }
         }
 
@@ -292,7 +291,7 @@ impl MoveGenerator {
             ep_moves &= self.blocks;
             ep_moves &= self.pins[sq];
 
-            do_moves!(self.board, sq, moves, f);
+            do_moves(&mut self.moves, &self.board, sq, moves);
 
             for sq2 in LocStack(ep_moves) {
                 let mut board = self.board.clone();
@@ -303,9 +302,7 @@ impl MoveGenerator {
                 board.black ^= true;
                 board.update_hash(&self.board);
 
-                if f(board) {
-                    return;
-                }
+                self.moves.push(board);
             }
         }
 
@@ -317,7 +314,7 @@ impl MoveGenerator {
             moves &= self.blocks;
             moves &= self.pins[sq];
 
-            do_moves!(self.board, sq, moves, f);
+            do_moves(&mut self.moves, &self.board, sq, moves);
         }
 
         // ========== Promoting Pawns ==========
@@ -341,19 +338,19 @@ impl MoveGenerator {
 
                 board2.b ^= u64x4::new(self.board.black as u64, 1, 0, 0) << sq2;
                 board2.update_hash(&board);
-                if f(board2.clone()) {return}
+                self.moves.push(board2.clone());
 
                 board2.b ^= u64x4::new(0, 0, 1, 0) << sq2;
                 board2.update_hash(&board);
-                if f(board2.clone()) {return}
+                self.moves.push(board2.clone());
 
                 board2.b ^= u64x4::new(0, 1, 0, 1) << sq2;
                 board2.update_hash(&board);
-                if f(board2.clone()) {return}
+                self.moves.push(board2.clone());
 
                 board2.b ^= u64x4::new(0, 0, 0, 1) << sq2;
                 board2.update_hash(&board);
-                if f(board2.clone()) {return}
+                self.moves.push(board2.clone());
             }
         }
 
@@ -368,9 +365,7 @@ impl MoveGenerator {
                 board.update_hash(&self.board);
 
                 if self.get_threats_board(&board, kingloc) == 0 {
-                    if f(board) {
-                        return;
-                    }
+                    self.moves.push(board);
                 }
             }
         }
@@ -382,7 +377,7 @@ impl MoveGenerator {
             moves &= self.blocks;
             moves &= self.pins[sq];
 
-            do_moves!(self.board, sq, moves, f);
+            do_moves(&mut self.moves, &self.board, sq, moves);
         }
 
         // ========== Bishop Moves ==========
@@ -392,7 +387,7 @@ impl MoveGenerator {
             moves &= self.blocks;
             moves &= self.pins[sq];
 
-            do_moves!(self.board, sq, moves, f);
+            do_moves(&mut self.moves, &self.board, sq, moves);
         }
 
         // ========== Rook Moves ==========
@@ -406,7 +401,7 @@ impl MoveGenerator {
             board.b &= u64x4::new(M,M,M,!(1 << sq));
             board.update_hash(&self.board);
 
-            do_moves!(board, sq, moves, f);
+            do_moves(&mut self.moves, &board, sq, moves);
         }
 
         // ========== Queen Moves ==========
@@ -420,19 +415,24 @@ impl MoveGenerator {
             moves &= self.blocks;
             moves &= self.pins[sq];
 
-            do_moves!(self.board, sq, moves, f);
+            do_moves(&mut self.moves, &self.board, sq, moves);
         }
     }
 }
 
 pub fn perft(board: Board, depth: usize) -> usize {
-    let generator = MoveGenerator::new(board);
+    let mut generator = MoveGenerator::new(board);
 
     if depth == 0 {
         1
     } else {
         let mut out = 0;
-        generator.gen_moves(|b| {out += perft(b, depth - 1); false});
+        generator.gen_moves();
+
+        for mov in generator.moves {
+            out += perft(mov, depth - 1);
+        }
+
         out
     }
 }
@@ -491,10 +491,10 @@ mod tests {
 
     fn gen_t_gen_moves(board: Board, mut moves2: Vec<Board>, full: bool) {
         let mut generator = MoveGenerator::new(board);
-        let mut moves = Vec::new();
-        let mut f = |b| {moves.push(b); false};
 
-        generator.gen_moves(f);
+        generator.gen_moves();
+
+        let moves = &mut generator.moves;
 
         moves.sort_by_key(|b| b.hash);
         moves2.sort_by_key(|b| b.hash);
@@ -518,7 +518,7 @@ mod tests {
                     panic!()
                 }
             }
-            assert_eq!(moves, moves2);
+            assert_eq!(moves, &moves2);
         }
     }
 
@@ -528,11 +528,10 @@ mod tests {
         let mut board = Board::from_fen("8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/8/8 w - -");
 
         let mut moves2 = Vec::new();
-        let mut f2 = |b| {moves2.push(b); false};
 
         expected = vec![(19, 0x1402002214), (29, 0x2048850df70a824), (33, 0x30505000000), (37, 0x88500050800000), (42, 0xc000000000000), (52, 0x10e8101010101010)];
         for (sq, moves) in expected {
-            do_moves!(board, sq, moves, f2);
+            do_moves(&mut moves2, &board, sq, moves);
         }
 
         moves2.push(Board::from_fen("6Q1/3Rp3/5P2/2B2pK1/2Q5/4N2p/8/8 b - -"));
@@ -580,7 +579,7 @@ mod tests {
         let mut generator = MoveGenerator::new(Board::from_fen("8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/6P1/5P2 w - -"));
         // let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
 
-        b.iter(|| generator.gen_moves(|_| test::black_box(false)));
+        b.iter(|| {generator.gen_moves(); generator.moves[0].clone()});
     }
 
     #[bench]
