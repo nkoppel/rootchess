@@ -74,7 +74,7 @@ impl Iterator for LocStack {
             None
         } else {
             let out = self.0.trailing_zeros();
-            self.0 ^= 1 << out;
+            self.0 &= self.0 - 1;
             Some(out as usize)
         }
     }
@@ -240,12 +240,12 @@ fn gen_ep_table() -> Vec<Vec<u64x4>> {
 
     vec![
         vec![
-            wp << 32 | bp << 31 | (wp ^ te) << 39,
-            wp << 32 | bp << 33 | (wp ^ te) << 41
+            wp << 32 | bp << 31 | wp << 39,
+            wp << 32 | bp << 33 | wp << 41
         ],
         vec![
-            bp << 24 | wp << 23 | (bp ^ te) << 15,
-            bp << 24 | wp << 25 | (bp ^ te) << 17
+            bp << 24 | wp << 23 | bp << 15,
+            bp << 24 | wp << 25 | bp << 17
         ]
     ]
 }

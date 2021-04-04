@@ -3,7 +3,7 @@ use crate::board::*;
 use crate::gen_moves::*;
 
 const SQUARE: u16 = 0x3f;
-const PIECE : u16 = 0xf;
+const PIECE : u16 = 0x7;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Move(pub u16);
@@ -78,6 +78,8 @@ impl Board {
         if self.pawns() & 1 << start != 0 &&
             self.takeable_empties() & 1 << end != 0
         {
+            out.remove_takeable_empty();
+
             out.b ^= TABLES.en_pass
                 [self.black as usize]
                 [(end % 8 > start % 8) as usize]
