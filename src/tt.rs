@@ -1,0 +1,154 @@
+use std::sync::Arc;
+use std::sync::atomic::{Ordering, AtomicU64};
+use std::iter;
+
+#[derive(Clone)]
+pub struct TT {
+    table: Arc<Vec<(AtomicU64, AtomicU64)>>,
+}
+
+impl TT {
+    pub fn new() -> Self {
+        Self {
+            table: Arc::new(Vec::new())
+        }
+    }
+
+    pub fn with_len(len: usize) -> Self {
+        Self {
+            table: Arc::new(
+                iter::repeat_with(|| (AtomicU64::new(0), AtomicU64::new(0)))
+                .take(len)
+                .collect()
+            )
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.table.len()
+    }
+
+    pub unsafe fn resize(&mut self, len: usize) {
+        // ub if table is being read or written to while this occurrs
+        *Arc::get_mut_unchecked(&mut self.table) =
+            iter::repeat_with(|| (AtomicU64::new(0), AtomicU64::new(0)))
+            .take(len)
+            .collect();
+    }
+
+    pub fn resize_safe(&mut self, len: usize) -> bool {
+        if let Some(t) = Arc::get_mut(&mut self.table) {
+            *t = iter::repeat_with(|| (AtomicU64::new(0), AtomicU64::new(0)))
+                .take(len)
+                .collect();
+
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn read(&self, hash: u64) -> Option<u64> {
+        if self.table.is_empty() {
+            return None;
+        }
+        let (h, d) = &self.table[hash as usize % self.len()];
+        let h = h.load(Ordering::Relaxed);
+        let d = d.load(Ordering::Relaxed);
+
+        if hash == h ^ d {
+            Some(d)
+        } else {
+            None
+        }
+    }
+
+    pub fn force_read(&self, hash: u64) -> (u64, u64) {
+        let (h, d) = &self.table[hash as usize % self.len()];
+
+        let h = h.load(Ordering::Relaxed);
+        let d = d.load(Ordering::Relaxed);
+
+        (h ^ d, d)
+    }
+
+    pub fn write(&mut self, hash: u64, data: u64) {
+        if self.table.is_empty() {
+            return;
+        }
+        let (h, d) = &self.table[hash as usize % self.len()];
+
+        h.store(hash ^ data, Ordering::Relaxed);
+        d.store(data, Ordering::Relaxed);
+    }
+}
+
+mod tests {
+    use super::*;
+    use test::Bencher;
+
+    use std::sync::Barrier;
+    use std::thread;
+
+    #[test]
+    fn t_resize() {
+        let mut tt = TT::new();
+
+        unsafe{tt.resize(20);}
+        assert_eq!(tt.len(), 20);
+
+        assert!(tt.resize_safe(10));
+        assert_eq!(tt.len(), 10);
+
+        let tt2 = tt.clone();
+
+        unsafe{tt.resize(20);}
+        assert_eq!(tt.len(), 20);
+
+        assert!(!tt.resize_safe(10));
+        assert_eq!(tt.len(), 20);
+    }
+
+    #[test]
+    fn t_write() {
+        let mut handles = Vec::with_capacity(16);
+        let barrier = Arc::new(Barrier::new(16));
+        let mut tt = TT::with_len(16);
+
+        for i in 0..16 {
+            let c = Arc::clone(&barrier);
+            let mut t = tt.clone();
+
+            handles.push(thread::spawn(move|| {
+                c.wait();
+                t.write(0, i);
+                t.write(i, i);
+            }));
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        assert_eq!(tt.read(0).unwrap() >> 4, 0);
+        assert_eq!(tt.read(15), Some(15));
+    }
+
+    #[bench]
+    fn b_read(b: &mut Bencher) {
+        let mut tt = TT::with_len(1);
+
+        tt.write(0, 1234);
+
+        b.iter(|| tt.read(0));
+    }
+
+    #[bench]
+    fn b_write(b: &mut Bencher) {
+        let mut tt = TT::new();
+
+        tt.resize_safe(1);
+
+        b.iter(|| tt.write(0, 1234));
+    }
+}

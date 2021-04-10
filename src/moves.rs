@@ -5,7 +5,7 @@ use crate::gen_moves::*;
 const SQUARE: u16 = 0x3f;
 const PIECE : u16 = 0x7;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct Move(pub u16);
 
 impl Move {

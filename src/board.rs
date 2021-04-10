@@ -319,6 +319,17 @@ impl Board {
     pub fn remove_takeable_empty(&mut self) {
         self.b &= !self.takeable_empties();
     }
+
+    pub fn all_pawns(&self) -> Board {
+        let mut out = Board {
+            b: u64x4::new(self.black_pawns(), 0, 0, self.pawns()),
+            black: self.black,
+            hash: 0
+        };
+
+        out.init_hash();
+        out
+    }
 }
 
 pub struct Hasher {

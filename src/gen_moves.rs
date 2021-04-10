@@ -1,3 +1,6 @@
+#[path = "eval.rs"]
+pub mod eval;
+
 use crate::gen_tables::*;
 use crate::board::*;
 use crate::moves::*;
@@ -107,8 +110,12 @@ impl MoveGenerator {
 
         let occ = board.occ();
 
-        for sq in LocStack(board.pawns() & self.opp_occ) {
-            out |= self.opp_pawn_takes[sq];
+        let opp_pawns = board.pawns() & self.opp_occ;
+
+        if board.black {
+            out |= eval::w_pawn_threats(opp_pawns);
+        } else {
+            out |= eval::b_pawn_threats(opp_pawns);
         }
 
         for sq in LocStack(board.knights() & self.opp_occ) {
@@ -224,6 +231,110 @@ fn do_moves(out: &mut Vec<Board>, board: &Board, sq: usize, moves: u64) {
 }
 
 impl MoveGenerator {
+    pub fn has_moves(&mut self) -> bool {
+        let occ = self.board.occ();
+
+        let kingloc =
+            (self.board.kings() & self.cur_occ).trailing_zeros() as usize;
+
+        if kingloc == 64 {
+            return false;
+        }
+
+        // ========== King Moves ==========
+        if TABLES.king[kingloc] & !self.cur_occ & !self.threatened != 0 {
+            return true;
+        }
+
+        // ========== Pawns ==========
+        let pawns = self.board.pawns() & self.cur_occ;
+
+        if self.board.black {
+            if eval::b_pawn_threats(pawns) & self.opp_occ != 0 {
+                return true;
+            } else if pawns >> 8 & !occ != 0 {
+                return true;
+            }
+        } else {
+            if eval::w_pawn_threats(pawns) & self.opp_occ != 0 {
+                return true;
+            } else if pawns << 8 & !occ != 0 {
+                return true;
+            }
+        }
+
+
+        // ========== Queen Moves ==========
+        for sq in LocStack(self.board.queens() & self.cur_occ) {
+            let mut moves = 0;
+
+            moves |= gen_bishop_moves(sq, occ);
+            moves |= gen_rook_moves(sq, occ);
+            moves &= !self.cur_occ;
+
+            moves &= self.blocks;
+            moves &= self.pins[sq];
+
+            if moves != 0 {
+                return true;
+            }
+        }
+
+        // ========== Bishop Moves ==========
+        for sq in LocStack(self.board.bishops() & self.cur_occ) {
+            let mut moves = gen_bishop_moves(sq, occ) & !self.cur_occ;
+
+            moves &= self.blocks;
+            moves &= self.pins[sq];
+
+            if moves != 0 {
+                return true;
+            }
+        }
+
+        // ========== Knight Moves ==========
+        for sq in LocStack(self.board.knights() & self.cur_occ) {
+            let mut moves = TABLES.knight[sq] & !self.cur_occ;
+
+            moves &= self.blocks;
+            moves &= self.pins[sq];
+
+            if moves != 0 {
+                return true;
+            }
+        }
+
+        // ========== Rook Moves ==========
+        for sq in LocStack(self.board.rooks() & self.cur_occ) {
+            let mut moves = gen_rook_moves(sq, occ) & !self.cur_occ;
+
+            moves &= self.blocks;
+            moves &= self.pins[sq];
+
+            if moves != 0 {
+                return true;
+            }
+        }
+
+        // ========== Castles ==========
+        for sq in LocStack(self.board.castling_rooks() & self.cur_occ) {
+            let (threat, empty, diff) =
+                TABLES.castles[self.board.black as usize][kingloc % 8][sq % 8];
+
+            if occ & empty == 0 && self.threatened & threat == 0 {
+                return true;
+            }
+        }
+
+        // ========== En Passant ==========
+        for te in LocStack(self.board.takeable_empties()) {
+            if self.opp_pawn_takes[te] & self.board.pawns() & self.cur_occ != 0 {
+                return true
+            }
+        }
+
+        false
+    }
     pub fn gen_moves(&mut self) {
         self.moves.clear();
 

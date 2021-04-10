@@ -1,3 +1,4 @@
+#![feature(get_mut_unchecked)]
 #![feature(test)]
 extern crate test;
 
@@ -8,19 +9,30 @@ mod gen_tables;
 mod board;
 mod gen_moves;
 mod moves;
+mod tt;
+mod uci;
 mod search;
+mod eval { pub use crate::gen_moves::eval; }
 
 use gen_tables::*;
 use board::*;
 use gen_moves::*;
 use moves::*;
+use tt::*;
+use uci::*;
 use search::*;
+use eval::*;
 
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 
 fn main() {
+    // let board = Board::from_fen("8/8/8/8/1p6/2k5/K1p5/8 b - -");
+    // let mut generator = MoveGenerator::empty();
+    // let mut tt = TT::with_len(10);
+
+    // println!("{}", generator.eval(board, &mut tt));
     perftree();
 
     // let mut board = Board::from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
@@ -45,21 +57,7 @@ fn perftree() {
         }
     }
 
-    let mut generator = MoveGenerator::new(board.clone());
-    let mut searcher = Searcher::new(22);
-    let mut total = 0;
-
-    generator.gen_moves();
-
-    for b in generator.moves {
-        let res = searcher.perft(b.clone(), depth - 1);
-
-        println!("{} {}", board.get_move(&b, false), res);
-        total += res;
-    }
-
-    println!();
-    println!("{}", total);
+    perftmanager(1 << 24, 4, board, depth);
 }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
