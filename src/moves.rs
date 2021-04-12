@@ -5,7 +5,7 @@ use crate::gen_moves::*;
 const SQUARE: u16 = 0x3f;
 const PIECE : u16 = 0x7;
 
-#[derive(Clone, Copy, Debug, PartialEq, Default)]
+#[derive(Clone, Copy, PartialEq, Default)]
 pub struct Move(pub u16);
 
 impl Move {
@@ -46,6 +46,12 @@ impl fmt::Display for Move {
         }
 
         Ok(())
+    }
+}
+
+impl fmt::Debug for Move {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
 

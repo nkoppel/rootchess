@@ -3,8 +3,9 @@ use crate::board::*;
 use crate::gen_moves::*;
 use crate::moves::*;
 use crate::tt::*;
+use crate::eval::*;
 
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, channel};
 
 pub struct Searcher {
     gens: Vec<MoveGenerator>,
@@ -105,7 +106,7 @@ impl Searcher {
         }
     }
 
-    fn quiesce(&mut self, board: Board, mut alpha: i32, beta: i32) -> i32 {
+    pub fn quiesce(&mut self, board: Board, mut alpha: i32, beta: i32) -> i32 {
         let cut = ibv_exact(beta);
 
         let mut generator =
@@ -127,7 +128,9 @@ impl Searcher {
 
         generator.set_board(board.clone());
         generator.gen_tactical();
-        generator.moves.sort_by_cached_key(|b| -board.eval_mvv_lva(b));
+        generator.moves.sort_by_cached_key(|b|
+            invert_if(!board.black, board.eval_mvv_lva(b))
+        );
         let mut iter = generator.moves.drain(..);
 
         loop {
@@ -170,10 +173,10 @@ impl Searcher {
                      mut beta: i32,
                      depth: u8,
                      stop: &Receiver<()>)
-        -> Result<i32, i32>
+        -> Option<i32>
     {
         if depth == 0 {
-            return Ok(self.quiesce(board, alpha, beta))
+            return Some(self.quiesce(board, alpha, beta))
         }
 
         let cut = ibv_exact(beta);
@@ -187,18 +190,20 @@ impl Searcher {
 
             if depth2 >= depth {
                 match score & 3 {
-                    0 | 1 if score >= beta  => return Ok(score),
+                    0 | 1 if score >= beta  => return Some(score),
                     1     if score >  alpha => alpha = score,
                     3     if score <  beta  => beta  = score,
                     _ => {}
                 }
             }
 
-            best_move = Some(board.do_move(mov));
+            if mov != Move(0) {
+                best_move = Some(board.do_move(mov));
+            }
         }
 
         if let Ok(()) = stop.try_recv() {
-            return Err(score2);
+            return None;
         }
 
         let mut generator =
@@ -210,21 +215,43 @@ impl Searcher {
 
         generator.set_board(board.clone());
         generator.gen_moves();
-        generator.moves.sort_by_cached_key(|b| {
+
+        let mut moves = std::mem::take(&mut generator.moves);
+        moves.sort_by_cached_key(|b| {
             if Some(b.clone()) == best_move {
                 -100000
             } else {
-                -board.eval_mvv_lva(b)
+                invert_if(!board.black, board.eval_mvv_lva(b))
             }
         });
+
+        generator.moves = moves;
+
+        if generator.moves.is_empty() {
+            if generator.get_checks() == 0 {
+                return Some(0);
+            } else {
+                return Some(-25600 * 4);
+            }
+        }
 
         let mut iter = generator.moves.drain(..);
 
         loop {
             match iter.next() {
                 Some(board2) => {
+                    if let Some(_) = best_move {
+                        if let Some(s) = self.alphabeta(board2.clone(), -alpha - 1, -alpha, depth - 1, stop) {
+                            if -s <= alpha {
+                                continue;
+                            }
+                        } else {
+                            return None;
+                        }
+                    }
+
                     match self.alphabeta(board2.clone(), -beta, -alpha, depth - 1, stop) {
-                        Ok(mut score) => {
+                        Some(mut score) => {
                             score = -score;
 
                             if score >= cut {
@@ -240,32 +267,14 @@ impl Searcher {
                                     };
 
                                 self.write_tt(board.hash, out, depth, mov);
-                                return Ok(out);
+                                return Some(out);
                             }
                             if score > alpha {
                                 alpha = score;
                                 best_move = Some(board2.clone());
                             }
                         }
-                        Err(mut score) => {
-                            score = -score;
-
-                            std::mem::drop(iter);
-                            self.gens.push(generator);
-
-                            if score >= cut {
-                                return Err(ibv_min(score));
-                            }
-                            if score > alpha {
-                                alpha = score;
-                            }
-
-                            if alpha > score2 {
-                                return Err(ibv_min(alpha));
-                            } else {
-                                return Err(score2);
-                            }
-                        }
+                        None => return None
                     }
                 },
                 None => break,
@@ -283,7 +292,7 @@ impl Searcher {
             };
 
         self.write_tt(board.hash, alpha, depth, mov);
-        Ok(alpha)
+        Some(alpha)
     }
 
     pub fn get_best_move(&self, board: &Board) -> Option<Move> {
@@ -295,5 +304,41 @@ impl Searcher {
             }
         }
         None
+    }
+
+    pub fn search(&mut self, board: Board, min_depth: u8, max_depth: u8)
+        -> i32
+    {
+        let mut score = Some(0);
+        // let mut alpha;
+        // let mut beta;
+        let recv = channel().1;
+
+        for depth in min_depth..=max_depth {
+            println!("{}", depth);
+            // alpha = score - 50;
+            // beta  = score + 50;
+
+            score =
+                self.alphabeta(board.clone(), -1000000, 1000000, depth, &recv);
+
+            // loop {
+                // let score2 =
+                    // self.alphabeta(board.clone(), alpha, beta, depth, &recv).unwrap();
+
+                // // println!("{} {} {} {}", score, score2, alpha, beta);
+
+                // if score2 <= alpha {
+                    // alpha += 3 * (alpha - score);
+                // } else if score2 >= beta {
+                    // beta += 3 * (beta - score);
+                // } else {
+                    // score = score2;
+                    // break;
+                // }
+            // }
+        }
+
+        score.unwrap()
     }
 }

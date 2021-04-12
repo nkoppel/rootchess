@@ -34,16 +34,19 @@ pub fn b_pawn_threats(pawns: u64) -> u64 {
     (pawns & 0xfefefefefefefefe) >> 9
 }
 
-const CHAIN_WEIGHT: i32 = 10;
+const CHAIN_WEIGHT: i32 = 5;
 const PASSED_WEIGHT: i32 = 20;
 const DOUBLED_WEIGHT: i32 = -15;
 const ISOLATED_WEIGHT: i32 = -15;
 const KING_PAWN_WEIGHT: i32 = 10;
 
+const CASTLE_BONUS: i32 = 50;
+
 const KNIGHT_MOVE_WEIGHT: i32 = 10;
 const BISHOP_MOVE_WEIGHT: i32 = 5;
 const ROOK_MOVE_WEIGHT  : i32 = 5;
-const KING_MOVE_WEIGHT  : i32 = 15;
+const QUEEN_MOVE_WEIGHT : i32 = 2;
+const KING_MOVE_WEIGHT  : i32 = 1;
 
 const PAWN_WEIGHT  : i32 = 100;
 const KNIGHT_WEIGHT: i32 = 300;
@@ -51,14 +54,15 @@ const BISHOP_WEIGHT: i32 = 300;
 const ROOK_WEIGHT  : i32 = 500;
 const QUEEN_WEIGHT : i32 = 900;
 
-const CENTER: u64 = 0x00003C3C3C3C0000;
+// const CENTER: u64 = 0x00003C3C3C3C0000;
+const CENTER: u64 = 0x0000001818000000;
 
 fn center_bonus(moves: u64, weight: i32) -> i32 {
-    (moves &  CENTER).count_ones() as i32 * weight * 6 / 5 +
+    (moves &  CENTER).count_ones() as i32 * weight * 2 +
     (moves & !CENTER).count_ones() as i32 * weight
 }
 
-fn invert_if(b: bool, n: i32) -> i32 {
+pub fn invert_if(b: bool, n: i32) -> i32 {
     if b {
         -n
     } else {
@@ -67,6 +71,24 @@ fn invert_if(b: bool, n: i32) -> i32 {
 }
 
 impl Board {
+    fn eval_material_pawnless(&self) -> i32 {
+        let mut out = 0;
+
+        out += self.white_bishops().count_ones() as i32 * BISHOP_WEIGHT;
+        out -= self.black_bishops().count_ones() as i32 * BISHOP_WEIGHT;
+
+        out += self.white_knights().count_ones() as i32 * KNIGHT_WEIGHT;
+        out -= self.black_knights().count_ones() as i32 * KNIGHT_WEIGHT;
+
+        out += self.white_rooks().count_ones() as i32 * ROOK_WEIGHT;
+        out -= self.black_rooks().count_ones() as i32 * ROOK_WEIGHT;
+
+        out += self.white_queens().count_ones() as i32 * QUEEN_WEIGHT;
+        out -= self.black_queens().count_ones() as i32 * QUEEN_WEIGHT;
+
+        out
+    }
+
     pub fn eval_material(&self) -> i32 {
         let mut out = 0;
 
@@ -149,40 +171,51 @@ impl MoveGenerator {
             ((self.board.queens() | self.board.rooks()) & self.opp_occ)
                 .count_ones() as i32;
 
-        let mut king_pawns =
+        let king_pawns =
             (TABLES.king[kingloc] & self.board.pawns() & self.cur_occ)
                 .count_ones() as i32;
 
+        let castle_rank = if self.board.black {56} else {0};
+        let castle_bonus =
+            if kingloc - castle_rank == 1 || kingloc - castle_rank == 5 {
+                CASTLE_BONUS
+            } else {
+                0
+            };
+
         invert_if(
             self.board.black,
-            KING_PAWN_WEIGHT * king_pawns - diag_attacks - rook_attacks
+            KING_PAWN_WEIGHT * king_pawns +
+                castle_bonus -
+                diag_attacks -
+                rook_attacks
         )
     }
 
     pub fn eval(&mut self, board: Board, p_hash: &mut TT) -> i32 {
+        let occ = self.board.occ();
         let pawns = board.all_pawns();
         let mut out = pawns.eval_pawns(p_hash);
 
-        for (black, mul) in vec![(false, -1), (true, 1)] {
+        for (black, mul) in vec![(true, -1), (false, 1)] {
             self.set_board(Board{ black, .. board });
+
+            out += self.eval_king();
 
             if !self.has_moves() {
                 if self.checks == 0 {
                     return 0;
                 } else {
-                    return mul * -256000;
+                    return mul * -25600;
                 }
             }
-
-            let occ = self.board.occ();
-            let mut mobility = 0;
 
             let kingloc =
                 (self.board.kings() & self.cur_occ).trailing_zeros() as usize;
 
             // ========== King Moves ==========
             let moves = TABLES.king[kingloc] & !self.cur_occ & !self.threatened;
-            mobility += mul * KING_MOVE_WEIGHT * moves.count_ones() as i32;
+            out += mul * KING_MOVE_WEIGHT * moves.count_ones() as i32;
 
             // ========== Knight Moves ==========
             for sq in LocStack(self.board.knights() & self.cur_occ) {
@@ -191,7 +224,7 @@ impl MoveGenerator {
                 moves &= self.blocks;
                 moves &= self.pins[sq];
 
-                mobility += center_bonus(moves, mul * KNIGHT_MOVE_WEIGHT);
+                out += center_bonus(moves, mul * KNIGHT_MOVE_WEIGHT);
             }
 
             let cur_diags =
@@ -200,29 +233,41 @@ impl MoveGenerator {
                 (self.board.rooks() | self.board.queens()) & self.cur_occ;
 
             // ========== Bishop Moves ==========
-            for sq in LocStack(cur_diags) {
+            for sq in LocStack(self.board.bishops() & self.cur_occ) {
                 let mut moves =
                     gen_bishop_moves(sq, occ & !cur_diags) & !self.cur_occ;
 
                 moves &= self.blocks;
                 moves &= self.pins[sq];
 
-                mobility += center_bonus(moves, mul * BISHOP_MOVE_WEIGHT);
+                out += center_bonus(moves, mul * BISHOP_MOVE_WEIGHT);
             }
 
             // ========== Rook Moves ==========
-            for sq in LocStack(cur_rook) {
+            for sq in LocStack(self.board.rooks() & self.cur_occ) {
                 let mut moves =
                     gen_rook_moves(sq, occ & !cur_rook) & !self.cur_occ;
 
                 moves &= self.blocks;
                 moves &= self.pins[sq];
 
-                mobility += center_bonus(moves, mul * ROOK_MOVE_WEIGHT);
+                out += center_bonus(moves, mul * ROOK_MOVE_WEIGHT);
+            }
+
+            // ========== Queen Moves ==========
+            for sq in LocStack(self.board.queens() & self.cur_occ) {
+                let mut moves =
+                    gen_rook_moves(sq, occ & !cur_rook) & !self.cur_occ |
+                    gen_bishop_moves(sq, occ & !cur_diags) & !self.cur_occ;
+
+                moves &= self.blocks;
+                moves &= self.pins[sq];
+
+                out += center_bonus(moves, mul * QUEEN_MOVE_WEIGHT);
             }
         }
 
-        invert_if(board.black, out)
+        invert_if(board.black, out + board.eval_material_pawnless())
     }
 }
 

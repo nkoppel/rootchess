@@ -12,7 +12,7 @@ mod moves;
 mod tt;
 mod uci;
 mod search;
-mod eval { pub use crate::gen_moves::eval; }
+mod eval { pub use crate::gen_moves::eval::*; }
 
 use gen_tables::*;
 use board::*;
@@ -28,20 +28,28 @@ use std::io::{self, BufRead};
 use std::path::Path;
 
 fn main() {
-    // let board = Board::from_fen("8/8/8/8/1p6/2k5/K1p5/8 b - -");
+    let mut board = Board::from_fen(START_FEN);
+    let mut generator = MoveGenerator::empty();
+    let mut tt = TT::with_len(1024);
+
+    loop {
+        let mut tt = TT::with_len(1 << 24);
+        let mut searcher = Searcher::new(tt.clone(), false);
+
+        let score = searcher.search(board.clone(), 1, 9);
+
+        board = board.do_move(searcher.get_best_move(&board).unwrap());
+        println!("{:?}", board);
+        println!("{:?}", generator.eval(board.clone(), &mut tt));
+    }
+
+    // perftree();
+
+    // let mut tt = TT::with_len(1024);
+    // let board = Board::from_fen("1n2k3/4p3/5p1p/8/8/5P1P/4P3/4K1N1 w - -");
     // let mut generator = MoveGenerator::empty();
-    // let mut tt = TT::with_len(10);
 
     // println!("{}", generator.eval(board, &mut tt));
-    perftree();
-
-    // let mut board = Board::from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
-    // let mut board = Board::from_fen(START_FEN);
-    // let mut generator = MoveGenerator::new(board);
-
-    // generator.gen_moves();
-
-    // println!("{:?}", generator.moves);
 }
 
 use std::env;

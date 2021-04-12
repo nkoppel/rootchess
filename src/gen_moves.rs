@@ -101,6 +101,8 @@ impl MoveGenerator {
         self.get_threats_board(&self.board, sq)
     }
 
+    pub fn get_checks(&self) -> u64 { self.checks }
+
     fn set_threatened(&mut self) {
         let mut out = 0;
 
