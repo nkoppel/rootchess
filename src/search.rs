@@ -313,9 +313,11 @@ impl Searcher {
         // let mut alpha;
         // let mut beta;
         let recv = channel().1;
+        use std::io::Write;
 
         for depth in min_depth..=max_depth {
-            println!("{}", depth);
+            print!("{}", depth % 10);
+            std::io::stdout().flush();
             // alpha = score - 50;
             // beta  = score + 50;
 
@@ -338,6 +340,8 @@ impl Searcher {
                 // }
             // }
         }
+
+        println!();
 
         score.unwrap()
     }

@@ -79,6 +79,7 @@ impl Board {
     pub fn do_move(&self, mov: Move) -> Board {
         let mut out = self.clone();
         let (start, end, piece) = mov.unpack();
+        let cur_occ = if self.black { self.black() } else { self.white() };
         out.black ^= true;
 
         if self.pawns() & 1 << start != 0 &&
@@ -101,6 +102,8 @@ impl Board {
         {
             out.b ^= TABLES.castles[self.black as usize][start][end].2;
 
+            out.b ^= u64x4::new(0,0,0,out.castling_rooks() & cur_occ);
+
             out.remove_takeable_empty();
             out.update_hash(&self);
 
@@ -110,7 +113,9 @@ impl Board {
             abs_diff(start, end) == 2
         {
             let end = if end > start {7} else {0};
-            out.b ^= TABLES.castles[self.black as usize][start][end].2;
+            out.b ^= TABLES.castles[self.black as usize][start % 8][end % 8].2;
+
+            out.b ^= u64x4::new(0,0,0,out.castling_rooks() & cur_occ);
 
             out.remove_takeable_empty();
             out.update_hash(&self);
@@ -186,7 +191,15 @@ impl Board {
                 .trailing_zeros() as usize;
 
             if !c960 {
-                end = end.clamp(1, 5);
+                if end > start {
+                    end = 5;
+                } else {
+                    end = 1;
+                }
+            }
+
+            if self.black {
+                end += 56;
             }
 
             Move::pack(start, end, 0)
