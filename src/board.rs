@@ -167,30 +167,36 @@ impl Board {
             out += " w ";
         }
 
+        let mut castles = Vec::new();
+
         for sq in LocStack(self.castling_white_rooks()) {
             if c960 {
                 let file = sq % 8;
-                out += &FILES[file..file + 1].to_ascii_uppercase();
+                castles.push(FILES.chars().nth(file).unwrap().to_ascii_uppercase());
             } else if sq == 0 {
-                out += "K"
+                castles.push('K');
             } else if sq == 7 {
-                out += "Q"
+                castles.push('Q');
             }
         }
 
         for sq in LocStack(self.castling_black_rooks()) {
             if c960 {
                 let file = sq % 8;
-                out += &FILES[file..file + 1];
+                castles.push(FILES.chars().nth(file).unwrap());
             } else if sq == 56 {
-                out += "k"
+                castles.push('k');
             } else if sq == 63 {
-                out += "q"
+                castles.push('q');
             }
         }
 
-        if &out[out.len() - 1 ..] == " " {
+        if castles.is_empty() {
             out += "-";
+        } else {
+            castles.sort();
+
+            out += &castles.into_iter().collect::<String>();
         }
 
         out += " ";

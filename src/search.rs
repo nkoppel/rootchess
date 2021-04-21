@@ -5,16 +5,27 @@ use crate::moves::*;
 use crate::tt::*;
 use crate::eval::*;
 
-use std::sync::mpsc::{Receiver, channel};
+use rand::{Rng, thread_rng};
+
+#[path = "uci.rs"]
+pub mod uci;
+
+use crate::search::uci::*;
+
+use std::sync::mpsc::{Sender, Receiver, channel};
 
 pub struct Searcher {
     gens: Vec<MoveGenerator>,
     c960: bool,
     nodes: usize,
     nodes_sec: usize,
+    curr_depth: u8,
     time: u8,
     tt: TT,
-    pawn_tt: TT
+    pawn_tt: TT,
+    recv: Receiver<SearcherCommand>,
+    stop: Receiver<()>,
+    id: usize,
 }
 
 fn pack_search(score: i32, time: u8, depth: u8, mov: Move) -> u64 {
@@ -43,21 +54,47 @@ fn unpack_perft(te: u64) -> (u8, u64) {
     ((te >> 56) as u8, te & 0x00ffffffffffffff)
 }
 
-pub fn ibv_exact(n: i32) -> i32 { (n + 1) & !3 }
-pub fn ibv_min(n: i32)   -> i32 { (n + 1) & !3 + 1 }
-pub fn ibv_max(n: i32)   -> i32 { (n + 1) & !3 - 1 }
+pub fn ibv_exact(n: i32) -> i32 {  (n + 1) & !3 }
+pub fn ibv_min(n: i32)   -> i32 { ((n + 1) & !3) + 1 }
+pub fn ibv_max(n: i32)   -> i32 { ((n + 1) & !3) - 1 }
+
+pub fn from_ibv(n: i32) -> i32 { ibv_exact(n) / 4 }
 
 impl Searcher {
-    pub fn new(tt: TT, c960: bool) -> Self {
+    pub fn new(tt: TT, pawn_tt: TT, recv: Receiver<SearcherCommand>, stop: Receiver<()>, id: usize) -> Self {
+        Self {
+            gens: Vec::new(),
+            c960: false,
+            nodes: 0,
+            nodes_sec: 0,
+            time: 0,
+            curr_depth: 0,
+            tt,
+            pawn_tt,
+            recv,
+            stop,
+            id
+        }
+    }
+
+    pub fn new_single(ttsize: usize, c960: bool) -> Self {
         Self {
             gens: Vec::new(),
             c960,
             nodes: 0,
             nodes_sec: 0,
             time: 0,
-            tt,
+            curr_depth: 0,
+            tt: TT::with_len(ttsize),
             pawn_tt: TT::with_len(1024),
+            recv: channel().1,
+            stop: channel().1,
+            id: 0,
         }
+    }
+
+    pub fn incr_time(&mut self) {
+        self.time = self.time.overflowing_add(1).0;
     }
 
     pub fn perft(&mut self, board: Board, depth: usize) -> u64 {
@@ -128,26 +165,22 @@ impl Searcher {
 
         generator.set_board(board.clone());
         generator.gen_tactical();
-        generator.moves.sort_by_cached_key(|b|
+        generator.moves.sort_by_cached_key(|b| {
             invert_if(!board.black, board.eval_mvv_lva(b))
-        );
+        });
         let mut iter = generator.moves.drain(..);
 
-        loop {
-            match iter.next() {
-                Some(board2) => {
-                    score = -self.quiesce(board2, -beta, -alpha);
 
-                    if score >= cut {
-                        std::mem::drop(iter);
-                        self.gens.push(generator);
-                        return score + 1;
-                    }
-                    if score > alpha {
-                        alpha = score;
-                    }
-                },
-                None => break,
+        while let Some(board2) = iter.next() {
+            score = -self.quiesce(board2, -beta, -alpha);
+
+            if score >= cut {
+                std::mem::drop(iter);
+                self.gens.push(generator);
+                return ibv_min(score);
+            }
+            if score > alpha {
+                alpha = score;
             }
         }
 
@@ -171,28 +204,30 @@ impl Searcher {
                      board: Board,
                      mut alpha: i32,
                      mut beta: i32,
-                     depth: u8,
-                     stop: &Receiver<()>)
+                     depth: u8)
         -> Option<i32>
     {
         if depth == 0 {
-            return Some(self.quiesce(board, alpha, beta))
+            return Some(self.quiesce(board, alpha, beta));
         }
+
+        let orig_alpha = alpha;
+
+        // alpha = ibv_max(alpha);
+        // beta  = ibv_min(beta );
 
         let cut = ibv_exact(beta);
         let mut best_move = None;
-        let mut score2 = ibv_min(alpha);
+        let mut pvs = false;
 
         if let Some(d) = self.tt.read(board.hash) {
             let (score, _, depth2, mov) = unpack_search(d);
 
-            score2 = score;
-
             if depth2 >= depth {
                 match score & 3 {
-                    0 | 1 if score >= beta  => return Some(score),
-                    1     if score >  alpha => alpha = score,
-                    3     if score <  beta  => beta  = score,
+                    0 => return Some(score),
+                    1 if score >= cut   => return Some(score),
+                    3 if score <  alpha => return Some(score),
                     _ => {}
                 }
             }
@@ -202,7 +237,7 @@ impl Searcher {
             }
         }
 
-        if let Ok(()) = stop.try_recv() {
+        if let Ok(()) = self.stop.try_recv() {
             return None;
         }
 
@@ -216,17 +251,6 @@ impl Searcher {
         generator.set_board(board.clone());
         generator.gen_moves();
 
-        let mut moves = std::mem::take(&mut generator.moves);
-        moves.sort_by_cached_key(|b| {
-            if Some(b.clone()) == best_move {
-                -100000
-            } else {
-                invert_if(!board.black, board.eval_mvv_lva(b))
-            }
-        });
-
-        generator.moves = moves;
-
         if generator.moves.is_empty() {
             if generator.get_checks() == 0 {
                 return Some(0);
@@ -235,49 +259,77 @@ impl Searcher {
             }
         }
 
+        let mut moves = std::mem::take(&mut generator.moves);
+
+        if depth == self.curr_depth && self.id > 0 {
+            let mut rng = thread_rng();
+
+            // use rand::prelude::SliceRandom;
+            // moves.shuffle(&mut rng);
+
+            moves.sort_by_cached_key(|b| {
+                if Some(b.clone()) == best_move {
+                    0
+                } else {
+                    rng.gen_range(1..1000000)
+                }
+            });
+        } else {
+            moves.sort_by_cached_key(|b| {
+                if Some(b.clone()) == best_move {
+                    -100000
+                } else {
+                    // invert_if(!board.black, board.eval_mvv_lva(b))
+                    if let Some(d) = self.tt.read(b.hash) {
+                        unpack_search(d).0
+                    } else {
+                        generator.eval(b.clone(), &mut self.pawn_tt) * 4
+                    }
+                }
+            });
+        }
+
+        generator.moves = moves;
+
         let mut iter = generator.moves.drain(..);
 
-        loop {
-            match iter.next() {
-                Some(board2) => {
-                    if let Some(_) = best_move {
-                        if let Some(s) = self.alphabeta(board2.clone(), -alpha - 1, -alpha, depth - 1, stop) {
-                            if -s <= alpha {
-                                continue;
-                            }
+        while let Some(board2) = iter.next() {
+            if pvs {
+                if let Some(s) = self.alphabeta(board2.clone(), -alpha - 4, -alpha, depth - 1) {
+                    if -s <= alpha {
+                        continue;
+                    }
+                } else {
+                    return None;
+                }
+            }
+
+            if let Some(mut score) = self.alphabeta(board2.clone(), -beta, -alpha, depth - 1) {
+                score = -score;
+
+                if score >= cut {
+                    std::mem::drop(iter);
+                    self.gens.push(generator);
+
+                    let out = ibv_min(score);
+                    let mov =
+                        if let Some(b) = best_move {
+                            board.get_move(&b, self.c960)
                         } else {
-                            return None;
-                        }
-                    }
+                            Move(0)
+                        };
 
-                    match self.alphabeta(board2.clone(), -beta, -alpha, depth - 1, stop) {
-                        Some(mut score) => {
-                            score = -score;
+                    self.write_tt(board.hash, out, depth, mov);
 
-                            if score >= cut {
-                                std::mem::drop(iter);
-                                self.gens.push(generator);
-
-                                let out = ibv_min(score);
-                                let mov =
-                                    if let Some(b) = best_move {
-                                        board.get_move(&b, self.c960)
-                                    } else {
-                                        Move(0)
-                                    };
-
-                                self.write_tt(board.hash, out, depth, mov);
-                                return Some(out);
-                            }
-                            if score > alpha {
-                                alpha = score;
-                                best_move = Some(board2.clone());
-                            }
-                        }
-                        None => return None
-                    }
-                },
-                None => break,
+                    return Some(out);
+                }
+                if score > alpha {
+                    alpha = score;
+                    best_move = Some(board2.clone());
+                    pvs = true;
+                }
+            } else {
+                return None
             }
         }
 
@@ -291,8 +343,13 @@ impl Searcher {
                 Move(0)
             };
 
-        self.write_tt(board.hash, alpha, depth, mov);
-        Some(alpha)
+        if alpha != orig_alpha {
+            self.write_tt(board.hash, alpha, depth, mov);
+            Some(alpha)
+        } else {
+            self.write_tt(board.hash, ibv_max(alpha), depth, mov);
+            Some(alpha)
+        }
     }
 
     pub fn get_best_move(&self, board: &Board) -> Option<Move> {
@@ -306,29 +363,55 @@ impl Searcher {
         None
     }
 
+    pub fn show_pv(&self, board: &Board) {
+        let mut board = board.clone();
+
+        while let Some(d) = self.tt.read(board.hash) {
+            let (.., mov) = unpack_search(d);
+
+            if mov.0 != 0 {
+                print!("{} ", mov);
+                board = board.do_move(mov);
+            } else {
+                break;
+            }
+        }
+        println!();
+        // println!("{}", board.to_fen(false));
+    }
+
     pub fn search(&mut self, board: Board, min_depth: u8, max_depth: u8)
         -> i32
     {
-        let mut score = Some(0);
+        let mut score = 0;
         // let mut alpha;
         // let mut beta;
-        let recv = channel().1;
         use std::io::Write;
 
-        for depth in min_depth..=max_depth {
-            print!("{}", depth % 10);
-            std::io::stdout().flush();
-            // alpha = score - 50;
-            // beta  = score + 50;
+        self.gens.clear();
 
-            score =
-                self.alphabeta(board.clone(), -1000000, 1000000, depth, &recv);
+        for depth in min_depth..=max_depth {
+            self.curr_depth = depth;
+
+            if let Some(s) = self.alphabeta(board.clone(), -1000000, 1000000, depth) {
+                score = s;
+            } else {
+                break;
+            }
+
+            if self.id == 0 {
+                print!("info depth {} seldepth {} score cp {} pv ", depth, self.gens.len(), from_ibv(score));
+                self.show_pv(&board);
+            }
+
+            // alpha = score - 200;
+            // beta  = score + 200;
 
             // loop {
                 // let score2 =
-                    // self.alphabeta(board.clone(), alpha, beta, depth, &recv).unwrap();
+                    // self.alphabeta(board.clone(), alpha, beta, depth).unwrap();
 
-                // // println!("{} {} {} {}", score, score2, alpha, beta);
+                // println!("{} {} {} {} {}", depth, score, score2, alpha, beta);
 
                 // if score2 <= alpha {
                     // alpha += 3 * (alpha - score);
@@ -341,8 +424,13 @@ impl Searcher {
             // }
         }
 
-        println!();
+        if self.id == 0 {
+            let mov1 = self.get_best_move(&board).unwrap();
+            let mov2 = self.get_best_move(&board.do_move(mov1)).unwrap();
 
-        score.unwrap()
+            println!("bestmove {} ponder {}", mov1, mov2);
+        }
+
+        score
     }
 }

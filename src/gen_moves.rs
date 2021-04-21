@@ -29,6 +29,7 @@ fn gen_bishop_moves(sq: usize, mut occ: u64) -> u64 {
     TABLES.magic[occ as usize]
 }
 
+#[derive(Debug, PartialEq)]
 pub struct MoveGenerator {
     board: Board,
     pins: Vec<u64>,
@@ -184,8 +185,9 @@ impl MoveGenerator {
         let kingloc = (self.board.kings() & self.cur_occ).trailing_zeros() as usize;
 
         if kingloc == 64 {
+            self.checks = 0;
             self.blocks = u64::MAX;
-            return;
+            panic!()
         }
 
         self.checks = self.get_threats(kingloc);

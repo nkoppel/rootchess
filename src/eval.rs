@@ -40,7 +40,7 @@ const DOUBLED_WEIGHT: i32 = -15;
 const ISOLATED_WEIGHT: i32 = -15;
 const KING_PAWN_WEIGHT: i32 = 10;
 
-const CASTLE_BONUS: i32 = 50;
+const CASTLE_BONUS: i32 = 25;
 
 const KNIGHT_MOVE_WEIGHT: i32 = 10;
 const BISHOP_MOVE_WEIGHT: i32 = 5;
@@ -56,10 +56,11 @@ const QUEEN_WEIGHT : i32 = 900;
 
 // const CENTER: u64 = 0x00003C3C3C3C0000;
 const CENTER: u64 = 0x0000001818000000;
+const PAWN_CENTER: u64 = 0x0000003C3C000000;
 
-fn center_bonus(moves: u64, weight: i32) -> i32 {
-    (moves &  CENTER).count_ones() as i32 * weight * 2 +
-    (moves & !CENTER).count_ones() as i32 * weight
+fn region_bonus(region: u64, moves: u64, weight: i32) -> i32 {
+    (moves &  region).count_ones() as i32 * weight * 7 / 5 +
+    (moves & !region).count_ones() as i32 * weight
 }
 
 pub fn invert_if(b: bool, n: i32) -> i32 {
@@ -142,7 +143,8 @@ impl Board {
         let b_isolated = (b_files &! adjacent(b_files)).count_ones() as i32;
 
         let out =
-            center_bonus(w, PAWN_WEIGHT) - center_bonus(b, PAWN_WEIGHT) +
+            region_bonus(PAWN_CENTER, w, PAWN_WEIGHT) -
+            region_bonus(PAWN_CENTER, b, PAWN_WEIGHT) +
             (w_chains   - b_chains  ) *    CHAIN_WEIGHT +
             (w_passed   - b_passed  ) *   PASSED_WEIGHT +
             (w_doubled  - b_doubled ) *  DOUBLED_WEIGHT +
@@ -177,7 +179,7 @@ impl MoveGenerator {
 
         let castle_rank = if self.board.black {56} else {0};
         let castle_bonus =
-            if kingloc - castle_rank == 1 || kingloc - castle_rank == 5 {
+            if kingloc > castle_rank && (kingloc - castle_rank == 1 || kingloc - castle_rank == 5) {
                 CASTLE_BONUS
             } else {
                 0
@@ -193,7 +195,7 @@ impl MoveGenerator {
     }
 
     pub fn eval(&mut self, board: Board, p_hash: &mut TT) -> i32 {
-        let occ = self.board.occ();
+        let occ = board.occ();
         let pawns = board.all_pawns();
         let mut out = pawns.eval_pawns(p_hash);
 
@@ -224,7 +226,7 @@ impl MoveGenerator {
                 moves &= self.blocks;
                 moves &= self.pins[sq];
 
-                out += center_bonus(moves, mul * KNIGHT_MOVE_WEIGHT);
+                out += region_bonus(CENTER, moves, mul * KNIGHT_MOVE_WEIGHT);
             }
 
             let cur_diags =
@@ -240,7 +242,7 @@ impl MoveGenerator {
                 moves &= self.blocks;
                 moves &= self.pins[sq];
 
-                out += center_bonus(moves, mul * BISHOP_MOVE_WEIGHT);
+                out += region_bonus(CENTER, moves, mul * BISHOP_MOVE_WEIGHT);
             }
 
             // ========== Rook Moves ==========
@@ -251,7 +253,7 @@ impl MoveGenerator {
                 moves &= self.blocks;
                 moves &= self.pins[sq];
 
-                out += center_bonus(moves, mul * ROOK_MOVE_WEIGHT);
+                out += region_bonus(CENTER, moves, mul * ROOK_MOVE_WEIGHT);
             }
 
             // ========== Queen Moves ==========
@@ -263,7 +265,7 @@ impl MoveGenerator {
                 moves &= self.blocks;
                 moves &= self.pins[sq];
 
-                out += center_bonus(moves, mul * QUEEN_MOVE_WEIGHT);
+                out += region_bonus(CENTER, moves, mul * QUEEN_MOVE_WEIGHT);
             }
         }
 

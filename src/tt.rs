@@ -81,6 +81,13 @@ impl TT {
         h.store(hash ^ data, Ordering::Relaxed);
         d.store(data, Ordering::Relaxed);
     }
+
+    pub fn clear(&mut self) {
+        for (h, d) in self.table.iter() {
+            h.store(0, Ordering::Relaxed);
+            d.store(0, Ordering::Relaxed);
+        }
+    }
 }
 
 mod tests {

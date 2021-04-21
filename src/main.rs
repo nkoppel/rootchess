@@ -10,38 +10,38 @@ mod board;
 mod gen_moves;
 mod moves;
 mod tt;
-mod uci;
 mod search;
 mod eval { pub use crate::gen_moves::eval::*; }
+mod uci { pub use crate::search::uci::*; }
 
 use gen_tables::*;
 use board::*;
 use gen_moves::*;
 use moves::*;
 use tt::*;
-use uci::*;
 use search::*;
 use eval::*;
+use uci::*;
 
 use std::fs::File;
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
 fn main() {
-    let mut board = Board::from_fen(START_FEN);
-    let mut generator = MoveGenerator::empty();
-    let mut tt = TT::with_len(1024);
+    ucimanager(BufReader::new(io::stdin()));
+    // let mut board = Board::from_fen(START_FEN);
+    // let mut searcher = Searcher::new_single(1 << 24, false);
 
-    loop {
-        let mut tt = TT::with_len(1 << 24);
-        let mut searcher = Searcher::new(tt.clone(), false);
+    // loop {
+        // // let score = searcher.search(board.clone(), 1, 6);
+        // let score = searcher.alphabeta(board.clone(), -1000000, 1000000, 7);
 
-        let score = searcher.search(board.clone(), 1, 9);
+        // board = board.do_move(searcher.get_best_move(&board).unwrap());
+        // println!("{:?}", from_ibv(score.unwrap()));
+        // println!("{:?}", board);
 
-        board = board.do_move(searcher.get_best_move(&board).unwrap());
-        println!("{:?}", board);
-        println!("{:?}", generator.eval(board.clone(), &mut tt));
-    }
+        // searcher.incr_time();
+    // }
 
     // perftree();
 
@@ -54,19 +54,19 @@ fn main() {
 
 use std::env;
 
-fn perftree() {
-    let args: Vec<_> = env::args().collect();
-    let depth = args[1].parse::<usize>().unwrap();
-    let mut board = Board::from_fen(&args[2]);
+// fn perftree() {
+    // let args: Vec<_> = env::args().collect();
+    // let depth = args[1].parse::<usize>().unwrap();
+    // let mut board = Board::from_fen(&args[2]);
 
-    if args.len() > 3 {
-        for mov in args[3].split(' ') {
-            board = board.do_move(mov.parse().unwrap());
-        }
-    }
+    // if args.len() > 3 {
+        // for mov in args[3].split(' ') {
+            // board = board.do_move(mov.parse().unwrap());
+        // }
+    // }
 
-    perftmanager(1 << 24, 4, board, depth);
-}
+    // perftmanager(1 << 24, 4, board, depth);
+// }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where P: AsRef<Path>, {
