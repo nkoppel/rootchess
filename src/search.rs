@@ -230,6 +230,14 @@ impl Searcher {
                     3 if score <  alpha => return Some(score),
                     _ => {}
                 }
+            } else {
+                let extra = 50 << depth - depth2 - 1;
+
+                if score >= cut + extra {
+                    return Some(score);
+                } else if score < alpha - extra {
+                    return Some(score);
+                }
             }
 
             if mov != Move(0) {

@@ -246,6 +246,33 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
             Some("getposition") => {
                 println!("info string {} 0 0", board.to_fen(c960));
             }
+            Some("domoves") => {
+                for mov in words {
+                    board = board.do_move(Move::from_uci(mov));
+                }
+                line = lines.next().unwrap().unwrap();
+                words = line.split_whitespace();
+
+                threads.send_all(SetBoard(board.clone()));
+            }
+            Some("dobestmove") => {
+                let mut reps = words
+                    .next()
+                    .unwrap_or("1")
+                    .parse::<usize>()
+                    .unwrap_or(1);
+
+                while let Some(mov) = searcher.get_best_move(&board) {
+                    board = board.do_move(mov);
+
+                    reps -= 1;
+                    if reps == 0 {
+                        break;
+                    }
+                }
+
+                threads.send_all(SetBoard(board.clone()));
+            }
             Some("setoption") => {
                 let mut val = false;
                 let mut name = String::new();
