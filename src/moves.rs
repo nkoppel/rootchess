@@ -36,13 +36,13 @@ use std::fmt;
 
 impl fmt::Display for Move {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", str_from_sq(self.get_start()));
-        write!(f, "{}", str_from_sq(self.get_end()));
+        write!(f, "{}", str_from_sq(self.get_start()))?;
+        write!(f, "{}", str_from_sq(self.get_end()))?;
 
         let piece = self.get_piece();
 
         if piece != 0 {
-            write!(f, "{}", &FEN_PIECES[piece + 8..piece + 9]);
+            write!(f, "{}", &FEN_PIECES[piece + 8..piece + 9])?;
         }
 
         Ok(())

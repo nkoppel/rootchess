@@ -1,5 +1,6 @@
-#![feature(get_mut_unchecked)]
 #![feature(test)]
+#![feature(get_mut_unchecked)]
+#![feature(duration_saturating_ops)]
 extern crate test;
 
 #[macro_use]
@@ -29,12 +30,11 @@ use std::path::Path;
 
 fn main() {
     ucimanager(BufReader::new(io::stdin()));
-    // let mut board = Board::from_fen(START_FEN);
+    // let mut board = Board::from_fen("r1bqkbnr/pppp1ppp/8/8/3nP3/5N2/PPP2PPP/RNB1KB1R w KQkq - ");
     // let mut searcher = Searcher::new_single(1 << 24, false);
 
     // loop {
-        // // let score = searcher.search(board.clone(), 1, 6);
-        // let score = searcher.alphabeta(board.clone(), -1000000, 1000000, 7);
+        // let score = searcher.alphabeta(board.clone(), 316, 320, 3);
 
         // board = board.do_move(searcher.get_best_move(&board).unwrap());
         // println!("{:?}", from_ibv(score.unwrap()));

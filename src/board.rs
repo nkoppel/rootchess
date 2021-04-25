@@ -439,16 +439,20 @@ mod tests {
     #[test]
     fn t_hash() {
         let mut board1 = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -");
-        let mut board2 = Board::from_fen("rnbqkbnr/pppppppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKBNR b KQkq e3");
+        let mut board2 = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq -");
+        let mut board3 = Board::from_fen("rnbqkbnr/pppppppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKBNR b KQkq e3");
 
         let hash1 = board1.hash;
         let hash2 = board2.hash;
+        let hash3 = board3.hash;
 
-        board1.update_hash(&board2);
-        board2.update_hash(&board1);
+        board1.update_hash(&board3);
+        board3.update_hash(&board1);
 
         assert_eq!(board1.hash, hash1);
-        assert_eq!(board2.hash, hash2);
+        assert_eq!(board3.hash, hash3);
+
+        assert!(hash1 != hash2)
     }
 
     #[test]

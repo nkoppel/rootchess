@@ -2,9 +2,9 @@ use std::sync::Arc;
 use std::sync::atomic::{Ordering, AtomicU64};
 use std::iter;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TT {
-    table: Arc<Vec<(AtomicU64, AtomicU64)>>,
+    table: Arc<Vec<u64>>,
 }
 
 impl TT {
@@ -16,31 +16,22 @@ impl TT {
 
     pub fn with_len(len: usize) -> Self {
         Self {
-            table: Arc::new(
-                iter::repeat_with(|| (AtomicU64::new(0), AtomicU64::new(0)))
-                .take(len)
-                .collect()
-            )
+            table: Arc::new(vec![0; len * 2])
         }
     }
 
     pub fn len(&self) -> usize {
-        self.table.len()
+        self.table.len() / 2
     }
 
     pub unsafe fn resize(&mut self, len: usize) {
         // ub if table is being read or written to while this occurrs
-        *Arc::get_mut_unchecked(&mut self.table) =
-            iter::repeat_with(|| (AtomicU64::new(0), AtomicU64::new(0)))
-            .take(len)
-            .collect();
+        Arc::get_mut_unchecked(&mut self.table).resize(len * 2, 0)
     }
 
     pub fn resize_safe(&mut self, len: usize) -> bool {
         if let Some(t) = Arc::get_mut(&mut self.table) {
-            *t = iter::repeat_with(|| (AtomicU64::new(0), AtomicU64::new(0)))
-                .take(len)
-                .collect();
+            t.resize(len * 2, 0);
 
             true
         } else {
@@ -52,9 +43,9 @@ impl TT {
         if self.table.is_empty() {
             return None;
         }
-        let (h, d) = &self.table[hash as usize % self.len()];
-        let h = h.load(Ordering::Relaxed);
-        let d = d.load(Ordering::Relaxed);
+        let ind = hash as usize % self.len() * 2;
+        let h = self.table[ind    ];
+        let d = self.table[ind + 1];
 
         if hash == h ^ d {
             Some(d)
@@ -64,28 +55,30 @@ impl TT {
     }
 
     pub fn force_read(&self, hash: u64) -> (u64, u64) {
-        let (h, d) = &self.table[hash as usize % self.len()];
-
-        let h = h.load(Ordering::Relaxed);
-        let d = d.load(Ordering::Relaxed);
+        let ind = hash as usize % self.len() * 2;
+        let h = self.table[ind    ];
+        let d = self.table[ind + 1];
 
         (h ^ d, d)
     }
 
     pub fn write(&mut self, hash: u64, data: u64) {
-        if self.table.is_empty() {
-            return;
-        }
-        let (h, d) = &self.table[hash as usize % self.len()];
+        unsafe {
+            let t = Arc::get_mut_unchecked(&mut self.table);
 
-        h.store(hash ^ data, Ordering::Relaxed);
-        d.store(data, Ordering::Relaxed);
+            if t.is_empty() {
+                return;
+            }
+
+            let ind = hash as usize % (t.len() / 2) * 2;
+            t[ind    ] = hash ^ data;
+            t[ind + 1] = data;
+        }
     }
 
     pub fn clear(&mut self) {
-        for (h, d) in self.table.iter() {
-            h.store(0, Ordering::Relaxed);
-            d.store(0, Ordering::Relaxed);
+        unsafe {
+            Arc::get_mut_unchecked(&mut self.table).fill(0)
         }
     }
 }
@@ -127,7 +120,7 @@ mod tests {
             let mut t = tt.clone();
 
             handles.push(thread::spawn(move|| {
-                c.wait();
+                // c.wait();
                 t.write(0, i);
                 t.write(i, i);
             }));
@@ -136,6 +129,8 @@ mod tests {
         for handle in handles {
             handle.join().unwrap();
         }
+
+        println!("{:?}", tt);
 
         assert_eq!(tt.read(0).unwrap() >> 4, 0);
         assert_eq!(tt.read(15), Some(15));

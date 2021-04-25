@@ -1,6 +1,7 @@
 // this is a submodule of search
 
 use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::sync::{Arc, Mutex};
 
@@ -11,23 +12,12 @@ pub enum SearcherCommand {
     SetBoard(Board),
     SetDebug(bool),
     SetC960(bool),
-    SearchDepth(u8),
-    SearchNodes(usize),
+    Search(Duration, u8),
     SearchPerft(usize, Arc<Mutex<Vec<Move>>>),
     Exit
 }
 
-#[derive(Clone, Debug, PartialEq)]
-// first argument is thread id
-pub enum SearcherInfo {
-    Nodes(usize, usize),
-    NodesSec(usize, usize),
-    SearchRes(usize, Move, i32),
-    Idle(usize),
-}
-
 pub use SearcherCommand::*;
-pub use SearcherInfo::*;
 
 impl Searcher {
     pub fn listen(&mut self) {
@@ -64,7 +54,8 @@ impl Searcher {
                         self.tt.clear();
                     }
                 }
-                SearchDepth(d) => {
+                Search(time, d) => {
+                    self.stop_time = Instant::now() + time;
                     self.search(board.clone(), 1, d);
                 },
                 SetBoard(b) => {
@@ -137,7 +128,7 @@ impl ThreadPool {
                 self.stops[thread].send(());
                 self.send(thread, Exit);
 
-                self.threads.pop().unwrap().join();
+                self.threads.pop().unwrap().join().unwrap();
                 self.sends.pop().unwrap();
                 self.stops.pop().unwrap();
                 self.tasks.pop().unwrap();
@@ -155,13 +146,13 @@ impl ThreadPool {
 
     fn send(&mut self, thread: usize, cmd: SearcherCommand) {
         match cmd {
-            SearchDepth(_) | SearchNodes(_) | SearchPerft(..) => {
+            Search(..) | SearchPerft(..) => {
                 self.tasks[thread] += 1;
             }
             _ => {}
         }
 
-        self.sends[thread].send(cmd);
+        self.sends[thread].send(cmd).unwrap();
     }
 
     fn send_all(&mut self, cmd: SearcherCommand) {
@@ -171,7 +162,7 @@ impl ThreadPool {
     }
 
     fn stop(&mut self, thread: usize) {
-        self.stops[thread].send(());
+        self.stops[thread].send(()).unwrap();
     }
 
     fn stop_all(&mut self) {
@@ -273,6 +264,14 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
 
                 threads.send_all(SetBoard(board.clone()));
             }
+            Some("waitonsearch") => {
+                let nthreads = threads.threads.len();
+
+                threads.send_all(Exit);
+                threads.join();
+
+                threads = ThreadPool::new(tt.clone(), pawn_tt.clone(), 1);
+            }
             Some("setoption") => {
                 let mut val = false;
                 let mut name = String::new();
@@ -317,6 +316,10 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
             }
             Some("go") => {
                 let mut depth = 255;
+                let mut ponder = false;
+                let mut time = Duration::from_secs(3155760000);
+                let mut inc = Duration::from_secs(0);
+                let mut movestogo = 30;
 
                 while let Some(w) = words.next() {
                     match w {
@@ -334,6 +337,32 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                                 );
                             }
                             threads.send_all(SetBoard(board.clone()));
+                            ponder = true;
+                        }
+                        "movestogo" => {
+                            if let Some(w) = words.next() {
+                                if let Ok(m) = w.parse::<u32>() {
+                                    movestogo = m
+                                }
+                            }
+                        }
+                        "wtime" | "btime" => {
+                            if board.black == (w == "btime") {
+                                if let Some(w) = words.next() {
+                                    if let Ok(t) = w.parse::<u64>() {
+                                        time = Duration::from_millis(t);
+                                    }
+                                }
+                            }
+                        }
+                        "winc" | "binc" => {
+                            if board.black == (w == "btime") {
+                                if let Some(w) = words.next() {
+                                    if let Ok(t) = w.parse::<u64>() {
+                                        inc = Duration::from_millis(t);
+                                    }
+                                }
+                            }
                         }
                         "perft" => {
                             let depth = 
@@ -361,7 +390,17 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                     }
                 }
 
-                threads.send_all(SearchDepth(depth));
+                let margin = Duration::from_millis(3);
+                let mut t = (time / movestogo).max(inc);
+
+                if time.saturating_sub(t) < margin {
+                    t = time - margin
+                }
+
+                println!("{:?}", t);
+
+                threads.stop_all();
+                threads.send_all(Search(t, depth));
             }
             Some("stop") => threads.stop_all(),
             Some("quit") => break,

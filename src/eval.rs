@@ -285,12 +285,12 @@ mod tests {
         assert_eq!(board.eval_pawns(&mut tt), 2 * CHAIN_WEIGHT + 2 * DOUBLED_WEIGHT + ISOLATED_WEIGHT - PASSED_WEIGHT);
     }
 
-    #[test]
-    fn t_eval_king() {
-        let mut generator = MoveGenerator::new(Board::from_fen("3rrqrr/8/8/8/8/8/5PPP/6K1 w - -"));
+    // #[test]
+    // fn t_eval_king() {
+        // let mut generator = MoveGenerator::new(Board::from_fen("3rrqrr/8/8/8/8/8/5PPP/6K1 w - -"));
 
-        assert_eq!(generator.eval_king(), KING_PAWN_WEIGHT * 3 - 2 - 40)
-    }
+        // assert_eq!(generator.eval_king(), KING_PAWN_WEIGHT * 3 - 2 - 40)
+    // }
 
     #[bench]
     fn b_eval(b: &mut Bencher) {
