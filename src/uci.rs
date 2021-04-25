@@ -318,6 +318,7 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                 let mut depth = 255;
                 let mut ponder = false;
                 let mut time = Duration::from_secs(3155760000);
+                let mut movetime = Duration::from_secs(0);
                 let mut inc = Duration::from_secs(0);
                 let mut movestogo = 30;
 
@@ -364,6 +365,13 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                                 }
                             }
                         }
+                        "movetime" => {
+                            if let Some(w) = words.next() {
+                                if let Ok(t) = w.parse::<u64>() {
+                                    movetime = Duration::from_millis(t);
+                                }
+                            }
+                        }
                         "perft" => {
                             let depth = 
                                 if let Some(w) = words.next() {
@@ -390,17 +398,17 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                     }
                 }
 
-                let margin = Duration::from_millis(3);
-                let mut t = (time / movestogo).max(inc);
+                if movetime.as_nanos() == 0 {
+                    let margin = Duration::from_millis(3);
+                    movetime = (time / movestogo).max(inc);
 
-                if time.saturating_sub(t) < margin {
-                    t = time - margin
+                    if time.saturating_sub(movetime) < margin {
+                        movetime = time - margin
+                    }
                 }
 
-                println!("{:?}", t);
-
                 threads.stop_all();
-                threads.send_all(Search(t, depth));
+                threads.send_all(Search(movetime, depth));
             }
             Some("stop") => threads.stop_all(),
             Some("quit") => break,

@@ -446,7 +446,7 @@ impl Searcher {
             print!("bestmove {} ", mov1);
 
             if let Some(mov2) = self.get_best_move(&board.do_move(mov1)) {
-                print!("ponder {} ", mov2);
+                print!("ponder {}", mov2);
             }
             println!();
         }
