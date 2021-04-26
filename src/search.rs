@@ -223,15 +223,15 @@ impl Searcher {
                     3 if score <  alpha => return Some(alpha),
                     _ => {}
                 }
-            } else if depth - depth2 <= 2 {
-                // Hash Table Pruning
-                let s = score & 3;
+            // } else if depth - depth2 <= 2 {
+                // // Hash Table Pruning
+                // let s = score & 3;
 
-                if score >= cut && (s == 0 || s == 1) {
-                    return Some(score);
-                } else if score < alpha && (s == 0 || s == 3) {
-                    return Some(alpha);
-                }
+                // if score >= cut && (s == 0 || s == 1) {
+                    // return Some(score);
+                // } else if score < alpha && (s == 0 || s == 3) {
+                    // return Some(alpha);
+                // }
             }
 
             if mov != Move(0) {
