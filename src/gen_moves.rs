@@ -238,6 +238,13 @@ impl MoveGenerator {
     pub fn has_moves(&mut self) -> bool {
         let occ = self.board.occ();
 
+        let pawn_shift =
+            if self.board.black {
+                Box::new(|x| x >> 8) as Box<dyn Fn(u64) -> u64>
+            } else {
+                Box::new(|x| x << 8) as Box<dyn Fn(u64) -> u64>
+            };
+
         let kingloc =
             (self.board.kings() & self.cur_occ).trailing_zeros() as usize;
 
@@ -250,23 +257,20 @@ impl MoveGenerator {
             return true;
         }
 
-        // ========== Pawns ==========
+        // ========== Pawn Moves ==========
         let pawns = self.board.pawns() & self.cur_occ;
 
-        if self.board.black {
-            if eval::b_pawn_threats(pawns) & self.opp_occ != 0 {
-                return true;
-            } else if pawns >> 8 & !occ != 0 {
-                return true;
-            }
-        } else {
-            if eval::w_pawn_threats(pawns) & self.opp_occ != 0 {
-                return true;
-            } else if pawns << 8 & !occ != 0 {
+        for sq in LocStack(self.board.pawns() & self.cur_occ) {
+            let mut moves = pawn_shift(1 << sq) & !occ;
+            moves |= self.cur_pawn_takes[sq] & self.opp_occ;
+
+            moves &= self.blocks;
+            moves &= self.pins[sq];
+
+            if moves != 0 {
                 return true;
             }
         }
-
 
         // ========== Queen Moves ==========
         for sq in LocStack(self.board.queens() & self.cur_occ) {
