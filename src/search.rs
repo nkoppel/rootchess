@@ -441,14 +441,14 @@ impl Searcher {
         }
 
         if self.id == 0 {
-            let mov1 = self.get_best_move(&board).unwrap();
+            if let Some(mov1) = self.get_best_move(&board) {
+                print!("bestmove {} ", mov1);
 
-            print!("bestmove {} ", mov1);
-
-            if let Some(mov2) = self.get_best_move(&board.do_move(mov1)) {
-                print!("ponder {}", mov2);
+                if let Some(mov2) = self.get_best_move(&board.do_move(mov1)) {
+                    print!("ponder {}", mov2);
+                }
+                println!();
             }
-            println!();
         }
 
         score

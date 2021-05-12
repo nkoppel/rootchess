@@ -56,7 +56,7 @@ impl Searcher {
                 }
                 Search(time, d) => {
                     self.stop_time = Instant::now() + time;
-                    self.search(board.clone(), 1, d);
+                    self.search(board.clone(), d.min(1), d);
                 },
                 SetBoard(b) => {
                     board = b;
@@ -305,8 +305,9 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                         }
                     }
                     "UCI_Chess960" => {
-                        if let Ok(c960) = value.trim().parse::<bool>() {
-                            threads.send_all(SetC960(c960));
+                        if let Ok(c) = value.trim().parse::<bool>() {
+                            threads.send_all(SetC960(c));
+                            c960 = c;
                         }
                     }
                     _ => {}

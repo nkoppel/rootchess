@@ -100,7 +100,7 @@ impl Board {
             self.rooks() & 1 << end != 0 &&
             (self.white() & (1 << start | 1 << end)).count_ones() % 2 == 0
         {
-            out.b ^= TABLES.castles[self.black as usize][start][end].2;
+            out.b ^= TABLES.castles[self.black as usize][start % 8][end % 8].2;
 
             out.b ^= u64x4::new(0,0,0,out.castling_rooks() & cur_occ);
 
