@@ -61,6 +61,18 @@ pub fn ibv_max(n: i32)   -> i32 { ((n + 1) & !3) - 1 }
 
 pub fn from_ibv(n: i32) -> i32 { ibv_exact(n) / 4 }
 
+pub fn show_ibv(n: i32) -> String {
+    let mut out = String::new();
+
+    match n & 3 {
+        1 => out += "lowerbound ",
+        3 => out += "upperbound ",
+        _ => {}
+    }
+
+    out + &format!("cp {}", from_ibv(n))
+}
+
 impl Searcher {
     pub fn new(tt: TT, pawn_tt: TT, recv: Receiver<SearcherCommand>, stop: Receiver<()>, id: usize) -> Self {
         Self {
@@ -316,11 +328,6 @@ impl Searcher {
 
                 let out = ibv_min(score);
                 let mov = board.get_move(&board2, self.c960);
-                    // if let Some(b) = best_move {
-                        // board.get_move(&b, self.c960)
-                    // } else {
-                        // Move(0)
-                    // };
 
                 self.write_tt(board.hash, out, depth, mov);
 
@@ -412,7 +419,7 @@ impl Searcher {
             }
 
             if self.id == 0 {
-                print!("info depth {} seldepth {} score cp {} pv ", depth, self.gens.len(), from_ibv(score));
+                print!("info depth {} seldepth {} score {} pv ", depth, self.gens.len(), show_ibv(score));
                 self.show_pv(depth as usize, &board);
             }
 

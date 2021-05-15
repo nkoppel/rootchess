@@ -90,10 +90,8 @@ impl MoveGenerator {
 
         out |= self.cur_pawn_takes[sq] & board.pawns();
         out |= TABLES.knight[sq] & board.knights();
-        out |= gen_bishop_moves(sq, occ) &
-            (board.bishops() | board.queens());
-        out |= gen_rook_moves(sq, occ) &
-            (board.rooks() | board.queens());
+        out |= gen_bishop_moves(sq, occ) & (board.bishops() | board.queens());
+        out |= gen_rook_moves(sq, occ)   & (board.rooks()   | board.queens());
 
         out & self.opp_occ
     }
@@ -147,10 +145,6 @@ impl MoveGenerator {
             *p = u64::MAX;
         }
 
-        if kingloc == 64 {
-            return;
-        }
-
         let bishop = gen_bishop_moves(kingloc, self.opp_occ);
         let rook = gen_rook_moves(kingloc, self.opp_occ);
 
@@ -184,9 +178,7 @@ impl MoveGenerator {
 
         let kingloc = (self.board.kings() & self.cur_occ).trailing_zeros() as usize;
 
-        if kingloc == 64 {
-            self.checks = 0;
-            self.blocks = u64::MAX;
+        if kingloc >= 64 {
             panic!()
         }
 
@@ -255,6 +247,8 @@ impl MoveGenerator {
         // ========== King Moves ==========
         if TABLES.king[kingloc] & !self.cur_occ & !self.threatened != 0 {
             return true;
+        } else if self.checks.count_ones() > 1 {
+            return false;
         }
 
         // ========== Pawn Moves ==========
@@ -336,13 +330,21 @@ impl MoveGenerator {
 
         // ========== En Passant ==========
         for te in LocStack(self.board.takeable_empties()) {
-            if self.opp_pawn_takes[te] & self.board.pawns() & self.cur_occ != 0 {
-                return true
+            for sq in LocStack(self.opp_pawn_takes[te] & self.board.pawns() & self.cur_occ) {
+                let mut board = self.board.clone();
+                board.b ^= TABLES.en_pass
+                    [self.board.black as usize]
+                    [(te % 8 > sq % 8) as usize] << sq as u32 % 8;
+
+                if self.get_threats_board(&board, kingloc) == 0 {
+                    return true;
+                }
             }
         }
 
         false
     }
+
     pub fn gen_moves(&mut self) {
         self.moves.clear();
 
@@ -361,7 +363,7 @@ impl MoveGenerator {
             (self.board.kings() & self.cur_occ).trailing_zeros() as usize;
 
         if kingloc == 64 {
-            return;
+            panic!()
         }
 
         let mut board = self.board.clone();

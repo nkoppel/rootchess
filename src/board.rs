@@ -205,9 +205,8 @@ impl Board {
 
         if ep_squares != 0 {
             out += &str_from_sq(ep_squares.trailing_zeros() as usize);
-            out += " ";
         } else {
-            out += "- ";
+            out += "-";
         }
 
         out
