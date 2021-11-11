@@ -54,19 +54,19 @@ fn main() {
 
 use std::env;
 
-// fn perftree() {
-    // let args: Vec<_> = env::args().collect();
-    // let depth = args[1].parse::<usize>().unwrap();
-    // let mut board = Board::from_fen(&args[2]);
+fn perftree() {
+    let args: Vec<_> = env::args().collect();
+    let depth = args[1].parse::<usize>().unwrap();
+    let mut board = Board::from_fen(&args[2]);
 
-    // if args.len() > 3 {
-        // for mov in args[3].split(' ') {
-            // board = board.do_move(mov.parse().unwrap());
-        // }
-    // }
+    if args.len() > 3 {
+        for mov in args[3].split(' ') {
+            board = board.do_move(mov.parse().unwrap());
+        }
+    }
 
-    // perftmanager(1 << 24, 4, board, depth);
-// }
+    perftmanager(1 << 24, 4, board, depth);
+}
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where P: AsRef<Path>, {

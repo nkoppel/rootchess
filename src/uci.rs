@@ -3,7 +3,7 @@
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use std::sync::mpsc::{channel, Sender, Receiver};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, atomic::{AtomicU64, Ordering}};
 
 use super::*;
 
@@ -13,7 +13,7 @@ pub enum SearcherCommand {
     SetDebug(bool),
     SetC960(bool),
     Search(Duration, u8),
-    SearchPerft(usize, Arc<Mutex<Vec<Move>>>),
+    SearchPerft(usize, Arc<Mutex<Vec<Move>>>, Arc<AtomicU64>),
     Exit
 }
 
@@ -25,9 +25,7 @@ impl Searcher {
 
         while let Ok(msg) = self.recv.recv() {
             match msg {
-                SearchPerft(depth, mut moves) => {
-                    let mut total = 0;
-                    
+                SearchPerft(depth, mut moves, total) => {
                     if self.id == 0 {
                         let lock = moves.lock().unwrap();
 
@@ -42,7 +40,7 @@ impl Searcher {
 
                             let board2 = board.do_move(mov);
                             let res = self.perft(board2, depth - 1);
-                            total += res;
+                            total.fetch_add(res, Ordering::Relaxed);
 
                             println!("{} {}", mov, res);
                         } else {
@@ -317,7 +315,6 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
             }
             Some("go") => {
                 let mut depth = 255;
-                let mut ponder = false;
                 let mut time = Duration::from_secs(3155760000);
                 let mut movetime = Duration::from_secs(0);
                 let mut inc = Duration::from_secs(0);
@@ -331,15 +328,6 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                                     depth = d
                                 }
                             }
-                        }
-                        "ponder" => {
-                            for _ in 0..2 {
-                                board = board.do_move(
-                                    searcher.get_best_move(&board).unwrap()
-                                );
-                            }
-                            threads.send_all(SetBoard(board.clone()));
-                            ponder = true;
                         }
                         "movestogo" => {
                             if let Some(w) = words.next() {
@@ -390,8 +378,9 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
 
                             let moves = generator.moves.drain(..).map(|b| board.get_move(&b, c960)).collect::<Vec<_>>();
                             let moves = Arc::new(Mutex::new(moves));
+                            let total = Arc::new(AtomicU64::new(0));
 
-                            threads.send_all(SearchPerft(depth, moves));
+                            threads.send_all(SearchPerft(depth, moves, total));
 
                             continue 'outer;
                         }
@@ -426,4 +415,29 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
             }
         }
     }
+}
+
+pub fn perftmanager(ttsize: usize, threads: usize, board: Board, depth: usize) {
+    let mut tt = TT::with_len(ttsize);
+    let mut pawn_tt = TT::with_len(1);
+
+    let mut threads = ThreadPool::new(tt.clone(), pawn_tt.clone(), threads);
+
+    let mut generator = MoveGenerator::new(board.clone());
+    generator.gen_moves();
+
+    let moves: Vec<_> =
+        generator.moves.iter().map(|b| board.get_move(&b, false)).collect();
+
+    let moves = Arc::new(Mutex::new(moves));
+    let total = Arc::new(AtomicU64::new(0));
+
+    threads.send_all(SetBoard(board.clone()));
+    threads.send_all(SearchPerft(depth, moves.clone(), total.clone()));
+    threads.send_all(Exit);
+
+    threads.join();
+
+    println!();
+    println!("{}", total.load(Ordering::Relaxed));
 }

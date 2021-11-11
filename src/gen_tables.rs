@@ -122,7 +122,7 @@ fn gen_att(sq: usize, deltas: &[(isize, isize)], board: u64) -> u64 {
     out
 }
 
-pub fn ray_mask(sq: usize, delta: (isize, isize), board: &mut u64) {
+fn ray_mask(sq: usize, delta: (isize, isize), board: &mut u64) {
     let mut x = (sq % 8) as isize;
     let mut y = (sq / 8) as isize;
     let (dx, dy) = delta;
