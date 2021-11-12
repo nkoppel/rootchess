@@ -2,7 +2,7 @@
 
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex, atomic::{AtomicU64, Ordering}};
 
 use super::*;
@@ -25,9 +25,11 @@ impl Searcher {
 
         while let Ok(msg) = self.recv.recv() {
             match msg {
-                SearchPerft(depth, mut moves, total) => {
+                SearchPerft(depth, moves, total) => {
                     if self.id == 0 {
-                        let lock = moves.lock().unwrap();
+                        // lock moves on the first thread so that we can clear the transpotition
+                        // table without the other threads working
+                        let _lock = moves.lock().unwrap();
 
                         self.tt.clear();
                     }
@@ -123,7 +125,7 @@ impl ThreadPool {
             if !self.threads.is_empty() {
                 let thread = self.threads.len() - 1;
 
-                self.stops[thread].send(());
+                self.stops[thread].send(()).unwrap();
                 self.send(thread, Exit);
 
                 self.threads.pop().unwrap().join().unwrap();
@@ -176,14 +178,14 @@ impl ThreadPool {
     }
 }
 
-use std::io::{self, prelude::*, BufReader, BufRead};
+use std::io::{prelude::*, BufReader, BufRead};
 
 pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
     let mut tt = TT::with_len(62500);
-    let mut pawn_tt = TT::with_len(62500);
+    let     pawn_tt = TT::with_len(62500);
 
     let mut generator = MoveGenerator::empty();
-    let mut searcher = Searcher::new(tt.clone(), pawn_tt.clone(), channel().1, channel().1, 0);
+    let     searcher = Searcher::new(tt.clone(), pawn_tt.clone(), channel().1, channel().1, 0);
     let mut threads = ThreadPool::new(tt.clone(), pawn_tt.clone(), 1);
 
     let mut lines = read.lines();
@@ -263,8 +265,6 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                 threads.send_all(SetBoard(board.clone()));
             }
             Some("waitonsearch") => {
-                let nthreads = threads.threads.len();
-
                 threads.send_all(Exit);
                 threads.join();
 
@@ -418,8 +418,8 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
 }
 
 pub fn perftmanager(ttsize: usize, threads: usize, board: Board, depth: usize) {
-    let mut tt = TT::with_len(ttsize);
-    let mut pawn_tt = TT::with_len(1);
+    let tt = TT::with_len(ttsize);
+    let pawn_tt = TT::with_len(1);
 
     let mut threads = ThreadPool::new(tt.clone(), pawn_tt.clone(), threads);
 

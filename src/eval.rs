@@ -273,39 +273,37 @@ impl MoveGenerator {
     }
 }
 
-mod tests {
-    use super::*;
-    use test::Bencher;
+#[allow(unused_imports)]
+use test::Bencher;
 
-    #[test]
-    fn t_eval_pawns() {
-        let board = Board::from_fen("8/2pppppp/8/7P/P6P/1P5P/2P5/8 w - -");
-        let mut tt = TT::with_len(10);
+#[test]
+fn t_eval_pawns() {
+    let board = Board::from_fen("8/2pppppp/8/7P/P6P/1P5P/2P5/8 w - -");
+    let mut tt = TT::with_len(10);
 
-        assert_eq!(board.eval_pawns(&mut tt), 2 * CHAIN_WEIGHT + 2 * DOUBLED_WEIGHT + ISOLATED_WEIGHT - PASSED_WEIGHT);
-    }
+    assert_eq!(board.eval_pawns(&mut tt), 2 * CHAIN_WEIGHT + 2 * DOUBLED_WEIGHT + ISOLATED_WEIGHT - PASSED_WEIGHT);
+}
 
-    // #[test]
-    // fn t_eval_king() {
-        // let mut generator = MoveGenerator::new(Board::from_fen("3rrqrr/8/8/8/8/8/5PPP/6K1 w - -"));
+// #[test]
+// fn t_eval_king() {
+    // let mut generator = MoveGenerator::new(Board::from_fen("3rrqrr/8/8/8/8/8/5PPP/6K1 w - -"));
 
-        // assert_eq!(generator.eval_king(), KING_PAWN_WEIGHT * 3 - 2 - 40)
-    // }
+    // assert_eq!(generator.eval_king(), KING_PAWN_WEIGHT * 3 - 2 - 40)
+// }
 
-    #[bench]
-    fn b_eval(b: &mut Bencher) {
-        let mut generator = MoveGenerator::empty();
-        let board = Board::from_fen("rn1qk2r/p1pnbppp/bp2p3/3pN3/2PP4/1P4P1/P2BPPBP/RN1QK2R w KQkq -");
-        let mut tt = TT::with_len(0);
+#[bench]
+fn b_eval(b: &mut Bencher) {
+    let mut generator = MoveGenerator::empty();
+    let board = Board::from_fen("rn1qk2r/p1pnbppp/bp2p3/3pN3/2PP4/1P4P1/P2BPPBP/RN1QK2R w KQkq -");
+    let mut tt = TT::with_len(0);
 
-        b.iter(|| generator.eval(board.clone(), &mut tt));
-    }
+    b.iter(|| generator.eval(board.clone(), &mut tt));
+}
 
-    #[bench]
-    fn b_eval_material(b: &mut Bencher) {
-        let board = Board::from_fen("rn1qk2r/p1pnbppp/bp2p3/3pN3/2PP4/1P4P1/P2BPPBP/RN1QK2R w KQkq -");
-        let mut tt = TT::with_len(0);
+#[bench]
+fn b_eval_material(b: &mut Bencher) {
+    let board = Board::from_fen("rn1qk2r/p1pnbppp/bp2p3/3pN3/2PP4/1P4P1/P2BPPBP/RN1QK2R w KQkq -");
+    let mut tt = TT::with_len(0);
 
-        b.iter(|| test::black_box(&board).eval_material());
-    }
+    b.iter(|| test::black_box(&board).eval_material());
 }

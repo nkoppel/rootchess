@@ -3,7 +3,6 @@ pub mod eval;
 
 use crate::gen_tables::*;
 use crate::board::*;
-use crate::moves::*;
 
 #[inline]
 fn gen_rook_moves(sq: usize, mut occ: u64) -> u64 {
@@ -27,6 +26,49 @@ fn gen_bishop_moves(sq: usize, mut occ: u64) -> u64 {
     occ += offset;
 
     TABLES.magic[occ as usize]
+}
+
+impl Board {
+    pub fn get_threats(&self, sq: usize) -> u64 {
+        let mut out = 0;
+        let occ = self.occ();
+
+        let opp_occ;
+        let cur_pawn_takes;
+
+        if self.black {
+            opp_occ = self.white();
+            cur_pawn_takes = &TABLES.black_pawn_takes;
+        } else {
+            opp_occ = self.black();
+            cur_pawn_takes = &TABLES.white_pawn_takes;
+        }
+
+        out |= cur_pawn_takes[sq] & self.pawns();
+        out |= TABLES.knight[sq] & self.knights();
+        out |= gen_bishop_moves(sq, occ) & (self.bishops() | self.queens());
+        out |= gen_rook_moves(sq, occ)   & (self.rooks()   | self.queens());
+
+        out & opp_occ
+    }
+
+    pub fn get_checks(&self) -> u64 {
+        let cur_occ;
+
+        if self.black {
+            cur_occ = self.black();
+        } else {
+            cur_occ = self.white();
+        }
+
+        let kingloc = (self.kings() & cur_occ).trailing_zeros() as usize;
+
+        self.get_threats(kingloc)
+    }
+
+    pub fn in_check(&self) -> bool {
+        self.get_checks() != 0
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -213,7 +255,7 @@ impl MoveGenerator {
 }
 
 fn do_moves(out: &mut Vec<Board>, board: &Board, sq: usize, moves: u64) {
-    let piece = (board.b >> (sq as u32) & 1);
+    let piece = board.b >> (sq as u32) & 1;
 
     for sq2 in LocStack(moves) {
         let mut board2 = board.clone();
@@ -252,8 +294,6 @@ impl MoveGenerator {
         }
 
         // ========== Pawn Moves ==========
-        let pawns = self.board.pawns() & self.cur_occ;
-
         for sq in LocStack(self.board.pawns() & self.cur_occ) {
             let mut moves = pawn_shift(1 << sq) & !occ;
             moves |= self.cur_pawn_takes[sq] & self.opp_occ;
@@ -320,7 +360,7 @@ impl MoveGenerator {
 
         // ========== Castles ==========
         for sq in LocStack(self.board.castling_rooks() & self.cur_occ) {
-            let (threat, empty, diff) =
+            let (threat, empty, _diff) =
                 TABLES.castles[self.board.black as usize][kingloc % 8][sq % 8];
 
             if occ & empty == 0 && self.threatened & threat == 0 {
@@ -690,207 +730,205 @@ impl MoveGenerator {
     }
 }
 
-mod tests {
-    use super::*;
-    use test::Bencher;
+#[allow(unused_imports)]
+use test::Bencher;
 
-    #[test]
-    fn t_get_threats() {
-        let mut generator = MoveGenerator::new(Board::from_fen("r7/q7/8/8/8/1nb5/2n5/K1P4r w - -"));
+#[test]
+fn t_get_threats() {
+    let mut generator = MoveGenerator::new(Board::from_fen("r7/q7/8/8/8/1nb5/2n5/K1P4r w - -"));
 
-        assert_eq!(generator.checks, 0x0080000000602000);
+    assert_eq!(generator.checks, 0x0080000000602000);
+}
+
+#[test]
+fn t_get_threatened() {
+    let mut generator = MoveGenerator::new(Board::from_fen("8/b5k1/8/3q1p2/8/1P1n1K2/8/7r w - -"));
+
+    assert_eq!(generator.threatened, 0xd7557fed7f5d47ff);
+}
+
+#[test]
+fn t_get_blocks() {
+    let mut generator = MoveGenerator::empty();
+
+    generator.set_board(Board::from_fen("8/8/8/8/8/2b5/8/K7 w - -")); 
+    assert_eq!(generator.blocks, 0x204000);
+
+    generator.set_board(Board::from_fen("8/8/r7/8/8/8/8/K7 w - -")); 
+    assert_eq!(generator.blocks, 0x0000808080808000);
+
+    generator.set_board(Board::from_fen("8/8/r7/8/8/2b5/8/K7 w - -")); 
+    assert_eq!(generator.blocks, 0);
+
+    generator.set_board(Board::from_fen("8/8/8/8/8/1n6/8/K7 w - -")); 
+    assert_eq!(generator.blocks, 0x400000);
+
+    generator.set_board(Board::from_fen("8/8/8/8/8/8/1p6/K7 w - -")); 
+    assert_eq!(generator.blocks, 0x4000);
+
+    generator.set_board(Board::from_fen("8/8/8/8/8/2n5/8/K7 w - -")); 
+    assert_eq!(generator.blocks, u64::MAX);
+}
+
+#[test]
+fn t_get_pins() {
+    let mut generator = MoveGenerator::new(Board::from_fen("r7/6b1/8/8/8/2P5/P7/KPP4q w - -"));
+    let mut res = vec![u64::MAX; 64];
+
+    res[15] = 0x8080808080808000;
+    res[21] = 0x0002040810204000;
+    generator.set_pins();
+    assert_eq!(generator.pins, res);
+}
+
+fn gen_t_gen_moves(board: Board, mut moves2: Vec<Board>, full: bool) {
+    let mut generator = MoveGenerator::new(board);
+
+    generator.gen_moves();
+
+    let moves = &mut generator.moves;
+
+    moves.sort_by_key(|b| b.hash);
+    moves2.sort_by_key(|b| b.hash);
+
+    if !full {
+        println!("{:?}", moves);
     }
 
-    #[test]
-    fn t_get_threatened() {
-        let mut generator = MoveGenerator::new(Board::from_fen("8/b5k1/8/3q1p2/8/1P1n1K2/8/7r w - -"));
-
-        assert_eq!(generator.threatened, 0xd7557fed7f5d47ff);
-    }
-
-    #[test]
-    fn t_get_blocks() {
-        let mut generator = MoveGenerator::empty();
-
-        generator.set_board(Board::from_fen("8/8/8/8/8/2b5/8/K7 w - -")); 
-        assert_eq!(generator.blocks, 0x204000);
-
-        generator.set_board(Board::from_fen("8/8/r7/8/8/8/8/K7 w - -")); 
-        assert_eq!(generator.blocks, 0x0000808080808000);
-
-        generator.set_board(Board::from_fen("8/8/r7/8/8/2b5/8/K7 w - -")); 
-        assert_eq!(generator.blocks, 0);
-
-        generator.set_board(Board::from_fen("8/8/8/8/8/1n6/8/K7 w - -")); 
-        assert_eq!(generator.blocks, 0x400000);
-
-        generator.set_board(Board::from_fen("8/8/8/8/8/8/1p6/K7 w - -")); 
-        assert_eq!(generator.blocks, 0x4000);
-
-        generator.set_board(Board::from_fen("8/8/8/8/8/2n5/8/K7 w - -")); 
-        assert_eq!(generator.blocks, u64::MAX);
-    }
-
-    #[test]
-    fn t_get_pins() {
-        let mut generator = MoveGenerator::new(Board::from_fen("r7/6b1/8/8/8/2P5/P7/KPP4q w - -"));
-        let mut res = vec![u64::MAX; 64];
-
-        res[15] = 0x8080808080808000;
-        res[21] = 0x0002040810204000;
-        generator.set_pins();
-        assert_eq!(generator.pins, res);
-    }
-
-    fn gen_t_gen_moves(board: Board, mut moves2: Vec<Board>, full: bool) {
-        let mut generator = MoveGenerator::new(board);
-
-        generator.gen_moves();
-
-        let moves = &mut generator.moves;
-
-        moves.sort_by_key(|b| b.hash);
-        moves2.sort_by_key(|b| b.hash);
-
-        if !full {
-            println!("{:?}", moves);
+    for mov2 in moves2.iter() {
+        if !moves.contains(mov2) {
+            println!("'moves' does not contain");
+            println!("{:?}", mov2);
+            panic!()
         }
-
-        for mov2 in moves2.iter() {
-            if !moves.contains(mov2) {
-                println!("'moves' does not contain");
-                println!("{:?}", mov2);
+    }
+    if full {
+        for mov1 in moves.iter() {
+            if !moves2.contains(mov1) {
+                println!("'moves2' does not contain");
+                println!("{:?}", mov1);
                 panic!()
             }
         }
-        if full {
-            for mov1 in moves.iter() {
-                if !moves2.contains(mov1) {
-                    println!("'moves2' does not contain");
-                    println!("{:?}", mov1);
-                    panic!()
-                }
-            }
-            assert_eq!(moves, &moves2);
-        }
+        assert_eq!(moves, &moves2);
+    }
+}
+
+#[test]
+fn t_gen_moves() {
+    let mut expected;
+    let mut board = Board::from_fen("8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/8/8 w - -");
+
+    let mut moves2 = Vec::new();
+
+    expected = vec![(19, 0x1402002214), (29, 0x2048850df70a824), (33, 0x30505000000), (37, 0x88500050800000), (42, 0xc000000000000), (52, 0x10e8101010101010)];
+
+    let mut board2 = board.clone();
+    board2.black ^= true;
+    board2.remove_takeable_empty();
+    board2.update_hash(&board);
+
+    for (sq, moves) in expected {
+        do_moves(&mut moves2, &board2, sq, moves);
     }
 
-    #[test]
-    fn t_gen_moves() {
-        let mut expected;
-        let mut board = Board::from_fen("8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/8/8 w - -");
+    moves2.push(Board::from_fen("6Q1/3Rp3/5P2/2B2pK1/2Q5/4N2p/8/8 b - -"));
+    moves2.push(Board::from_fen("6R1/3Rp3/5P2/2B2pK1/2Q5/4N2p/8/8 b - -"));
+    moves2.push(Board::from_fen("6B1/3Rp3/5P2/2B2pK1/2Q5/4N2p/8/8 b - -"));
+    moves2.push(Board::from_fen("6N1/3Rp3/5P2/2B2pK1/2Q5/4N2p/8/8 b - -"));
 
-        let mut moves2 = Vec::new();
+    gen_t_gen_moves(board, moves2, true);
 
-        expected = vec![(19, 0x1402002214), (29, 0x2048850df70a824), (33, 0x30505000000), (37, 0x88500050800000), (42, 0xc000000000000), (52, 0x10e8101010101010)];
+    board = Board::from_fen("PPPPPPK1/PPPPPPP1/8/4pP2/8/8/8/8 w - e6");
+    moves2 = vec![
+        Board::from_fen("PPPPPP1K/PPPPPPP1/8/4pP2/8/8/8/8 b - -"),
+        Board::from_fen("PPPPPPK1/PPPPPPP1/5P2/4p3/8/8/8/8 b - -"),
+        Board::from_fen("PPPPPP2/PPPPPPPK/8/4pP2/8/8/8/8 b - -"),
+        Board::from_fen("PPPPPPK1/PPPPPPP1/4P3/8/8/8/8/8 b - -"),
+    ];
 
-        let mut board2 = board.clone();
-        board2.black ^= true;
-        board2.remove_takeable_empty();
-        board2.update_hash(&board);
+    gen_t_gen_moves(board, moves2, true);
 
-        for (sq, moves) in expected {
-            do_moves(&mut moves2, &board2, sq, moves);
-        }
+    board = Board::from_fen("8/8/8/8/8/8/8/R3K2R w KQ -");
+    moves2 = vec![
+        Board::from_fen("8/8/8/8/8/8/8/R3K1R1 b Q -"),
+        Board::from_fen("8/8/8/8/8/8/8/1R2K2R b K -"),
+        Board::from_fen("8/8/8/8/8/8/8/R4RK1 b - -"),
+        Board::from_fen("8/8/8/8/8/8/8/2KR3R b - -"),
+        Board::from_fen("8/8/8/8/8/8/8/R2K3R b - -"),
+    ];
 
-        moves2.push(Board::from_fen("6Q1/3Rp3/5P2/2B2pK1/2Q5/4N2p/8/8 b - -"));
-        moves2.push(Board::from_fen("6R1/3Rp3/5P2/2B2pK1/2Q5/4N2p/8/8 b - -"));
-        moves2.push(Board::from_fen("6B1/3Rp3/5P2/2B2pK1/2Q5/4N2p/8/8 b - -"));
-        moves2.push(Board::from_fen("6N1/3Rp3/5P2/2B2pK1/2Q5/4N2p/8/8 b - -"));
+    gen_t_gen_moves(board, moves2, false);
 
-        gen_t_gen_moves(board, moves2, true);
+    board = Board::from_fen("K4p1p/3P2P1/8/8/8/8/8/8 w - -");
 
-        board = Board::from_fen("PPPPPPK1/PPPPPPP1/8/4pP2/8/8/8/8 w - e6");
-        moves2 = vec![
-            Board::from_fen("PPPPPP1K/PPPPPPP1/8/4pP2/8/8/8/8 b - -"),
-            Board::from_fen("PPPPPPK1/PPPPPPP1/5P2/4p3/8/8/8/8 b - -"),
-            Board::from_fen("PPPPPP2/PPPPPPPK/8/4pP2/8/8/8/8 b - -"),
-            Board::from_fen("PPPPPPK1/PPPPPPP1/4P3/8/8/8/8/8 b - -"),
-        ];
+    moves2 = vec![
+        Board::from_fen("K2Q1p1p/6P1/8/8/8/8/8/8 b - -"),
+        Board::from_fen("K4R1p/3P4/8/8/8/8/8/8 b - -"),
+        Board::from_fen("K4pBp/3P4/8/8/8/8/8/8 b - -"),
+        Board::from_fen("K4p1N/3P4/8/8/8/8/8/8 b - -"),
+    ];
 
-        gen_t_gen_moves(board, moves2, true);
+    gen_t_gen_moves(board, moves2, false);
+}
 
-        board = Board::from_fen("8/8/8/8/8/8/8/R3K2R w KQ -");
-        moves2 = vec![
-            Board::from_fen("8/8/8/8/8/8/8/R3K1R1 b Q -"),
-            Board::from_fen("8/8/8/8/8/8/8/1R2K2R b K -"),
-            Board::from_fen("8/8/8/8/8/8/8/R4RK1 b - -"),
-            Board::from_fen("8/8/8/8/8/8/8/2KR3R b - -"),
-            Board::from_fen("8/8/8/8/8/8/8/R2K3R b - -"),
-        ];
+#[bench]
+fn b_gen_moves(b: &mut Bencher) {
+    let mut generator = MoveGenerator::new(Board::from_fen("8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/6P1/5P2 w - -"));
+    // let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
 
-        gen_t_gen_moves(board, moves2, false);
+    b.iter(|| generator.gen_moves());
+}
 
-        board = Board::from_fen("K4p1p/3P2P1/8/8/8/8/8/8 w - -");
+#[bench]
+fn b_gen_tactical(b: &mut Bencher) {
+    let mut generator = MoveGenerator::new(Board::from_fen("8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/6P1/5P2 w - -"));
+    // let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
 
-        moves2 = vec![
-            Board::from_fen("K2Q1p1p/6P1/8/8/8/8/8/8 b - -"),
-            Board::from_fen("K4R1p/3P4/8/8/8/8/8/8 b - -"),
-            Board::from_fen("K4pBp/3P4/8/8/8/8/8/8 b - -"),
-            Board::from_fen("K4p1N/3P4/8/8/8/8/8/8 b - -"),
-        ];
+    b.iter(|| generator.gen_tactical());
+}
 
-        gen_t_gen_moves(board, moves2, false);
-    }
+#[bench]
+fn b_get_threats(b: &mut Bencher) {
+    let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
+    let kingloc = 3;
 
-    #[bench]
-    fn b_gen_moves(b: &mut Bencher) {
-        let mut generator = MoveGenerator::new(Board::from_fen("8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/6P1/5P2 w - -"));
-        // let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
+    b.iter(|| test::black_box(&generator).get_threats(kingloc));
+}
 
-        b.iter(|| generator.gen_moves());
-    }
+#[bench]
+fn b_set_threatened(b: &mut Bencher) {
+    let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
 
-    #[bench]
-    fn b_gen_tactical(b: &mut Bencher) {
-        let mut generator = MoveGenerator::new(Board::from_fen("8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/6P1/5P2 w - -"));
-        // let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
+    b.iter(|| {
+        test::black_box(&mut generator).set_threatened();
+    });
+}
 
-        b.iter(|| generator.gen_tactical());
-    }
+#[bench]
+fn b_set_pins(b: &mut Bencher) {
+    let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
+    // let mut generator = MoveGenerator::new(Board::from_fen("r7/6b1/8/8/8/2P5/P7/KPP4q w - -"));
 
-    #[bench]
-    fn b_get_threats(b: &mut Bencher) {
-        let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
-        let kingloc = 3;
+    b.iter(|| {
+        test::black_box(&mut generator).set_pins();
+    });
+}
 
-        b.iter(|| test::black_box(&generator).get_threats(kingloc));
-    }
+#[bench]
+fn b_set_blocks(b: &mut Bencher) {
+    let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
+    // generator.board = Board::from_fen("r7/6b1/8/8/8/2P5/P7/KPP4q w - -");
 
-    #[bench]
-    fn b_set_threatened(b: &mut Bencher) {
-        let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
+    b.iter(|| {
+        test::black_box(&mut generator).set_blocks();
+    });
+}
 
-        b.iter(|| {
-            test::black_box(&mut generator).set_threatened();
-        });
-    }
+#[bench]
+fn b_set_board(b: &mut Bencher) {
+    let mut generator = MoveGenerator::empty();
+    let board = Board::from_fen(START_FEN);
 
-    #[bench]
-    fn b_set_pins(b: &mut Bencher) {
-        let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
-        // let mut generator = MoveGenerator::new(Board::from_fen("r7/6b1/8/8/8/2P5/P7/KPP4q w - -"));
-
-        b.iter(|| {
-            test::black_box(&mut generator).set_pins();
-        });
-    }
-
-    #[bench]
-    fn b_set_blocks(b: &mut Bencher) {
-        let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
-        // generator.board = Board::from_fen("r7/6b1/8/8/8/2P5/P7/KPP4q w - -");
-
-        b.iter(|| {
-            test::black_box(&mut generator).set_blocks();
-        });
-    }
-
-    #[bench]
-    fn b_set_board(b: &mut Bencher) {
-        let mut generator = MoveGenerator::empty();
-        let board = Board::from_fen(START_FEN);
-
-        b.iter(|| generator.set_board(test::black_box(board.clone())));
-    }
+    b.iter(|| generator.set_board(test::black_box(board.clone())));
 }

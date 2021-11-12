@@ -1,6 +1,5 @@
 use crate::gen_tables::*;
 use crate::board::*;
-use crate::gen_moves::*;
 
 const SQUARE: u16 = 0x3f;
 const PIECE : u16 = 0x7;
@@ -225,34 +224,32 @@ impl Board {
     }
 }
 
-mod tests {
-    use super::*;
-    use test::Bencher;
+#[allow(unused_imports)]
+use test::Bencher;
 
-    fn get_test_cases() -> Vec<(Move, Board)> {
-        vec![
-            ("d5c6", "7n/6P1/2P5/8/5N2/8/P7/R3K3 b Q -"),
-            ("g7h8r", "7R/8/8/2pP4/5N2/8/P7/R3K3 b Q -"),
-            ("e1e2", "7n/6P1/8/2pP4/5N2/8/P3K3/R7 b - -"),
-            ("a1a8", "R6n/6P1/8/2pP4/5N2/8/P7/4K3 b - -"),
-            ("e1c1", "7n/6P1/8/2pP4/5N2/8/P7/2KR4 b - -"),
-            ("a2a4", "7n/6P1/8/2pP4/P4N2/8/8/R3K3 b Q a3"),
-        ]
-            .into_iter()
-            .map(|(m, b)| (m.parse().unwrap(), Board::from_fen(b)))
-            .collect()
+fn get_test_cases() -> Vec<(Move, Board)> {
+    vec![
+        ("d5c6", "7n/6P1/2P5/8/5N2/8/P7/R3K3 b Q -"),
+        ("g7h8r", "7R/8/8/2pP4/5N2/8/P7/R3K3 b Q -"),
+        ("e1e2", "7n/6P1/8/2pP4/5N2/8/P3K3/R7 b - -"),
+        ("a1a8", "R6n/6P1/8/2pP4/5N2/8/P7/4K3 b - -"),
+        ("e1c1", "7n/6P1/8/2pP4/5N2/8/P7/2KR4 b - -"),
+        ("a2a4", "7n/6P1/8/2pP4/P4N2/8/8/R3K3 b Q a3"),
+    ]
+        .into_iter()
+        .map(|(m, b)| (m.parse().unwrap(), Board::from_fen(b)))
+        .collect()
+}
+
+#[test]
+fn t_moves() {
+    let board = Board::from_fen("7n/6P1/8/2pP4/5N2/8/P7/R3K3 w Q c6");
+
+    for (mov, board2) in get_test_cases() {
+        assert_eq!(board.do_move(mov), board2);
     }
 
-    #[test]
-    fn t_moves() {
-        let board = Board::from_fen("7n/6P1/8/2pP4/5N2/8/P7/R3K3 w Q c6");
-
-        for (mov, board2) in get_test_cases() {
-            assert_eq!(board.do_move(mov), board2);
-        }
-
-        for (mov, board2) in get_test_cases() {
-            assert_eq!(board.get_move(&board2, false), mov);
-        }
+    for (mov, board2) in get_test_cases() {
+        assert_eq!(board.get_move(&board2, false), mov);
     }
 }

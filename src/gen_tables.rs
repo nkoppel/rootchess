@@ -234,7 +234,6 @@ pub fn abs_diff(a: usize, b: usize) -> usize {
 }
 
 fn gen_ep_table() -> Vec<Vec<u64x4>> {
-    let te = piece_to_sq(8);
     let wp = piece_to_sq(1);
     let bp = piece_to_sq(9);
 

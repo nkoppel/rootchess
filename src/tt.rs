@@ -1,6 +1,4 @@
 use std::sync::Arc;
-use std::sync::atomic::{Ordering, AtomicU64};
-use std::iter;
 
 #[derive(Clone, Debug)]
 pub struct TT {
@@ -83,74 +81,74 @@ impl TT {
     }
 }
 
-mod tests {
-    use super::*;
-    use test::Bencher;
+#[allow(unused_imports)]
+use test::Bencher;
 
-    use std::sync::Barrier;
-    use std::thread;
+#[allow(unused_imports)]
+use std::sync::Barrier;
+#[allow(unused_imports)]
+use std::thread;
 
-    #[test]
-    fn t_resize() {
-        let mut tt = TT::new();
+#[test]
+fn t_resize() {
+    let mut tt = TT::new();
 
-        unsafe{tt.resize(20);}
-        assert_eq!(tt.len(), 20);
+    unsafe{tt.resize(20);}
+    assert_eq!(tt.len(), 20);
 
-        assert!(tt.resize_safe(10));
-        assert_eq!(tt.len(), 10);
+    assert!(tt.resize_safe(10));
+    assert_eq!(tt.len(), 10);
 
-        let tt2 = tt.clone();
+    let tt2 = tt.clone();
 
-        unsafe{tt.resize(20);}
-        assert_eq!(tt.len(), 20);
+    unsafe{tt.resize(20);}
+    assert_eq!(tt.len(), 20);
 
-        assert!(!tt.resize_safe(10));
-        assert_eq!(tt.len(), 20);
+    assert!(!tt.resize_safe(10));
+    assert_eq!(tt.len(), 20);
+}
+
+#[test]
+fn t_write() {
+    let mut handles = Vec::with_capacity(16);
+    let barrier = Arc::new(Barrier::new(16));
+    let mut tt = TT::with_len(16);
+
+    for i in 0..16 {
+        let c = Arc::clone(&barrier);
+        let mut t = tt.clone();
+
+        handles.push(thread::spawn(move|| {
+            // c.wait();
+            t.write(0, i);
+            t.write(i, i);
+        }));
     }
 
-    #[test]
-    fn t_write() {
-        let mut handles = Vec::with_capacity(16);
-        let barrier = Arc::new(Barrier::new(16));
-        let mut tt = TT::with_len(16);
-
-        for i in 0..16 {
-            let c = Arc::clone(&barrier);
-            let mut t = tt.clone();
-
-            handles.push(thread::spawn(move|| {
-                // c.wait();
-                t.write(0, i);
-                t.write(i, i);
-            }));
-        }
-
-        for handle in handles {
-            handle.join().unwrap();
-        }
-
-        println!("{:?}", tt);
-
-        assert_eq!(tt.read(0).unwrap() >> 4, 0);
-        assert_eq!(tt.read(15), Some(15));
+    for handle in handles {
+        handle.join().unwrap();
     }
 
-    #[bench]
-    fn b_read(b: &mut Bencher) {
-        let mut tt = TT::with_len(1);
+    println!("{:?}", tt);
 
-        tt.write(0, 1234);
+    assert_eq!(tt.read(0).unwrap() >> 4, 0);
+    assert_eq!(tt.read(15), Some(15));
+}
 
-        b.iter(|| tt.read(0));
-    }
+#[bench]
+fn b_read(b: &mut Bencher) {
+    let mut tt = TT::with_len(1);
 
-    #[bench]
-    fn b_write(b: &mut Bencher) {
-        let mut tt = TT::new();
+    tt.write(0, 1234);
 
-        tt.resize_safe(1);
+    b.iter(|| tt.read(0));
+}
 
-        b.iter(|| tt.write(0, 1234));
-    }
+#[bench]
+fn b_write(b: &mut Bencher) {
+    let mut tt = TT::new();
+
+    tt.resize_safe(1);
+
+    b.iter(|| tt.write(0, 1234));
 }

@@ -431,57 +431,55 @@ impl FromStr for Board {
     }
 }
 
-mod tests {
-    use super::*;
-    use test::Bencher;
+#[allow(unused_imports)]
+use test::Bencher;
 
-    #[test]
-    fn t_hash() {
-        let mut board1 = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -");
-        let mut board2 = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq -");
-        let mut board3 = Board::from_fen("rnbqkbnr/pppppppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKBNR b KQkq e3");
+#[test]
+fn t_hash() {
+    let mut board1 = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -");
+    let mut board2 = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq -");
+    let mut board3 = Board::from_fen("rnbqkbnr/pppppppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKBNR b KQkq e3");
 
-        let hash1 = board1.hash;
-        let hash2 = board2.hash;
-        let hash3 = board3.hash;
+    let hash1 = board1.hash;
+    let hash2 = board2.hash;
+    let hash3 = board3.hash;
 
-        board1.update_hash(&board3);
-        board3.update_hash(&board1);
+    board1.update_hash(&board3);
+    board3.update_hash(&board1);
 
-        assert_eq!(board1.hash, hash1);
-        assert_eq!(board3.hash, hash3);
+    assert_eq!(board1.hash, hash1);
+    assert_eq!(board3.hash, hash3);
 
-        assert!(hash1 != hash2)
-    }
+    assert!(hash1 != hash2)
+}
 
-    #[test]
-    fn t_fen() {
-        let board = Board::from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq -");
+#[test]
+fn t_fen() {
+    let board = Board::from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq -");
 
-        assert_eq!(board, Board::from_fen(&board.to_fen(false)));
-        assert_eq!(board, Board::from_fen(&board.to_fen(true)));
-    }
+    assert_eq!(board, Board::from_fen(&board.to_fen(false)));
+    assert_eq!(board, Board::from_fen(&board.to_fen(true)));
+}
 
-    #[bench]
-    fn b_init_hash(b: &mut Bencher) {
-        let mut board = Board::from_fen(START_FEN);
+#[bench]
+fn b_init_hash(b: &mut Bencher) {
+    let mut board = Board::from_fen(START_FEN);
 
-        b.iter(|| {
-            board.init_hash();
-            board.hash
-        });
-    }
+    b.iter(|| {
+        board.init_hash();
+        board.hash
+    });
+}
 
-    #[bench]
-    fn b_update_hash(b: &mut Bencher) {
-        let mut board1 = Board::from_fen(START_FEN);
-        let mut board2 = Board::from_fen(
-            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
-        );
+#[bench]
+fn b_update_hash(b: &mut Bencher) {
+    let mut board1 = Board::from_fen(START_FEN);
+    let mut board2 = Board::from_fen(
+        "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+    );
 
-        b.iter(|| {
-            board2.update_hash(test::black_box(&board1));
-            board2.hash
-        });
-    }
+    b.iter(|| {
+        board2.update_hash(test::black_box(&board1));
+        board2.hash
+    });
 }

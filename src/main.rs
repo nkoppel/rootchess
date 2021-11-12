@@ -1,6 +1,6 @@
 #![feature(test)]
 #![feature(get_mut_unchecked)]
-#![feature(duration_saturating_ops)]
+#![allow(dead_code)]
 extern crate test;
 
 #[macro_use]
@@ -15,13 +15,13 @@ mod search;
 mod eval { pub use crate::gen_moves::eval::*; }
 mod uci { pub use crate::search::uci::*; }
 
-use gen_tables::*;
+// use gen_tables::*;
 use board::*;
-use gen_moves::*;
-use moves::*;
-use tt::*;
-use search::*;
-use eval::*;
+// use gen_moves::*;
+// use moves::*;
+// use tt::*;
+// use search::*;
+// use eval::*;
 use uci::*;
 
 use std::fs::File;
@@ -34,10 +34,12 @@ fn main() {
     // let mut searcher = Searcher::new_single(1 << 24, false);
 
     // loop {
-        // let score = searcher.alphabeta(board.clone(), 316, 320, 3);
+        // // let score = searcher.alphabeta(board.clone(), 316, 320, 3);
+        // let score = searcher.alphabeta(board.clone(), -200000, 200000, 3);
 
         // board = board.do_move(searcher.get_best_move(&board).unwrap());
         // println!("{:?}", from_ibv(score.unwrap()));
+        // println!("{}", board.to_fen(false));
         // println!("{:?}", board);
 
         // searcher.incr_time();
