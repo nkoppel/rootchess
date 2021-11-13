@@ -303,7 +303,6 @@ fn b_eval(b: &mut Bencher) {
 #[bench]
 fn b_eval_material(b: &mut Bencher) {
     let board = Board::from_fen("rn1qk2r/p1pnbppp/bp2p3/3pN3/2PP4/1P4P1/P2BPPBP/RN1QK2R w KQkq -");
-    let mut tt = TT::with_len(0);
 
     b.iter(|| test::black_box(&board).eval_material());
 }

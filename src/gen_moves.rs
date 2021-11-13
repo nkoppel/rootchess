@@ -735,14 +735,14 @@ use test::Bencher;
 
 #[test]
 fn t_get_threats() {
-    let mut generator = MoveGenerator::new(Board::from_fen("r7/q7/8/8/8/1nb5/2n5/K1P4r w - -"));
+    let generator = MoveGenerator::new(Board::from_fen("r7/q7/8/8/8/1nb5/2n5/K1P4r w - -"));
 
     assert_eq!(generator.checks, 0x0080000000602000);
 }
 
 #[test]
 fn t_get_threatened() {
-    let mut generator = MoveGenerator::new(Board::from_fen("8/b5k1/8/3q1p2/8/1P1n1K2/8/7r w - -"));
+    let generator = MoveGenerator::new(Board::from_fen("8/b5k1/8/3q1p2/8/1P1n1K2/8/7r w - -"));
 
     assert_eq!(generator.threatened, 0xd7557fed7f5d47ff);
 }
@@ -816,12 +816,11 @@ fn gen_t_gen_moves(board: Board, mut moves2: Vec<Board>, full: bool) {
 
 #[test]
 fn t_gen_moves() {
-    let mut expected;
     let mut board = Board::from_fen("8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/8/8 w - -");
 
     let mut moves2 = Vec::new();
 
-    expected = vec![(19, 0x1402002214), (29, 0x2048850df70a824), (33, 0x30505000000), (37, 0x88500050800000), (42, 0xc000000000000), (52, 0x10e8101010101010)];
+    let expected = vec![(19, 0x1402002214), (29, 0x2048850df70a824), (33, 0x30505000000), (37, 0x88500050800000), (42, 0xc000000000000), (52, 0x10e8101010101010)];
 
     let mut board2 = board.clone();
     board2.black ^= true;
@@ -890,7 +889,7 @@ fn b_gen_tactical(b: &mut Bencher) {
 
 #[bench]
 fn b_get_threats(b: &mut Bencher) {
-    let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
+    let generator = MoveGenerator::new(Board::from_fen(START_FEN));
     let kingloc = 3;
 
     b.iter(|| test::black_box(&generator).get_threats(kingloc));

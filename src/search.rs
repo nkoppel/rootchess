@@ -55,8 +55,8 @@ fn unpack_perft(te: u64) -> (u8, u64) {
 }
 
 pub fn ibv_exact(n: i32) -> i32 {  (n + 1) & !3 }
-pub fn ibv_min(n: i32)   -> i32 { ((n + 1) & !3) + 1 }
-pub fn ibv_max(n: i32)   -> i32 { ((n + 1) & !3) - 1 }
+pub fn ibv_min  (n: i32) -> i32 { ((n + 1) & !3) + 1 }
+pub fn ibv_max  (n: i32) -> i32 { ((n + 1) & !3) - 1 }
 
 pub fn from_ibv(n: i32) -> i32 { ibv_exact(n) / 4 }
 

@@ -437,7 +437,7 @@ use test::Bencher;
 #[test]
 fn t_hash() {
     let mut board1 = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -");
-    let mut board2 = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq -");
+    let     board2 = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq -");
     let mut board3 = Board::from_fen("rnbqkbnr/pppppppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKBNR b KQkq e3");
 
     let hash1 = board1.hash;
@@ -473,7 +473,7 @@ fn b_init_hash(b: &mut Bencher) {
 
 #[bench]
 fn b_update_hash(b: &mut Bencher) {
-    let mut board1 = Board::from_fen(START_FEN);
+    let     board1 = Board::from_fen(START_FEN);
     let mut board2 = Board::from_fen(
         "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
     );

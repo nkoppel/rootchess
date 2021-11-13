@@ -99,7 +99,7 @@ fn t_resize() {
     assert!(tt.resize_safe(10));
     assert_eq!(tt.len(), 10);
 
-    let tt2 = tt.clone();
+    let _tt2 = tt.clone();
 
     unsafe{tt.resize(20);}
     assert_eq!(tt.len(), 20);
@@ -111,15 +111,12 @@ fn t_resize() {
 #[test]
 fn t_write() {
     let mut handles = Vec::with_capacity(16);
-    let barrier = Arc::new(Barrier::new(16));
-    let mut tt = TT::with_len(16);
+    let tt = TT::with_len(16);
 
     for i in 0..16 {
-        let c = Arc::clone(&barrier);
         let mut t = tt.clone();
 
         handles.push(thread::spawn(move|| {
-            // c.wait();
             t.write(0, i);
             t.write(i, i);
         }));
