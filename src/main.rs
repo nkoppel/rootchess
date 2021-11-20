@@ -20,7 +20,7 @@ use board::*;
 // use gen_moves::*;
 // use moves::*;
 // use tt::*;
-// use search::*;
+use search::*;
 // use eval::*;
 use uci::*;
 
@@ -29,21 +29,22 @@ use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
 fn main() {
-    ucimanager(BufReader::new(io::stdin()));
+    // ucimanager(BufReader::new(io::stdin()));
     // let mut board = Board::from_fen("r1bqkbnr/pppp1ppp/8/8/3nP3/5N2/PPP2PPP/RNB1KB1R w KQkq - ");
-    // let mut searcher = Searcher::new_single(1 << 24, false);
+    let mut board = Board::from_fen(START_FEN);
+    let mut searcher = Searcher::new_single(1 << 24, false);
 
-    // loop {
-        // // let score = searcher.alphabeta(board.clone(), 316, 320, 3);
-        // let score = searcher.alphabeta(board.clone(), -200000, 200000, 3);
+    loop {
+        // let score = searcher.alphabeta(board.clone(), 316, 320, 3);
+        let score = searcher.alphabeta(board.clone(), -200000, 200000, 8);
 
-        // board = board.do_move(searcher.get_best_move(&board).unwrap());
-        // println!("{:?}", from_ibv(score.unwrap()));
-        // println!("{}", board.to_fen(false));
-        // println!("{:?}", board);
+        board = board.do_move(searcher.get_best_move(&board).unwrap());
+        println!("{:?}", from_ibv(score.unwrap()));
+        println!("{}", board.to_fen(false));
+        println!("{:?}", board);
 
-        // searcher.incr_time();
-    // }
+        searcher.incr_time();
+    }
 
     // perftree();
 

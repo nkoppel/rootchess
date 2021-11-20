@@ -81,6 +81,7 @@ impl Board {
         let cur_occ = if self.black { self.black() } else { self.white() };
         out.black ^= true;
 
+        // En Passant
         if self.pawns() & 1 << start != 0 &&
             self.takeable_empties() & 1 << end != 0
         {
@@ -95,6 +96,7 @@ impl Board {
 
             out
         }
+        // Castling (Chess960)
         else if self.kings() & 1 << start != 0 &&
             self.rooks() & 1 << end != 0 &&
             (self.white() & (1 << start | 1 << end)).count_ones() % 2 == 0
@@ -108,6 +110,7 @@ impl Board {
 
             out
         }
+        // Castling (Normal)
         else if self.kings() & 1 << start != 0 &&
             abs_diff(start, end) == 2
         {
@@ -121,6 +124,7 @@ impl Board {
 
             out
         }
+        // Double-Moving Pawns
         else if self.pawns() & 1 << start != 0 &&
             (start as isize - end as isize).abs() == 16
         {
@@ -136,6 +140,7 @@ impl Board {
 
             out
         }
+        // Other moves
         else {
             let mut sq = self.b >> start as u32 & 1;
 

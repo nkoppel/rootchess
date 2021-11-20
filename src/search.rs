@@ -7,6 +7,7 @@ use crate::eval::*;
 use rand::{Rng, thread_rng};
 use std::time::{Duration, Instant};
 use std::sync::mpsc::{Receiver, channel};
+use std::collections::HashSet;
 
 #[path = "uci.rs"]
 pub mod uci;
@@ -21,6 +22,7 @@ pub struct Searcher {
     curr_depth: u8,
     time: u8,
     stop_time: Instant,
+    prev_pos: HashSet<u64>,
     tt: TT,
     pawn_tt: TT,
     recv: Receiver<SearcherCommand>,
@@ -82,6 +84,7 @@ impl Searcher {
             time: 0,
             stop_time: Instant::now() + Duration::from_secs(3155760000),
             curr_depth: 0,
+            prev_pos: HashSet::new(),
             tt,
             pawn_tt,
             recv,
@@ -99,6 +102,7 @@ impl Searcher {
             time: 0,
             stop_time: Instant::now() + Duration::from_secs(3155760000),
             curr_depth: 0,
+            prev_pos: HashSet::new(),
             tt: TT::with_len(ttsize),
             pawn_tt: TT::with_len(1024),
             recv: channel().1,
@@ -212,6 +216,10 @@ impl Searcher {
         if depth == 0 {
             return Some(self.quiesce(board, alpha, beta));
         }
+        // Repeated positions are draws
+        if self.prev_pos.contains(&board.hash) {
+            return Some(0);
+        }
 
         let orig_alpha = alpha;
 
@@ -244,6 +252,20 @@ impl Searcher {
         // Check for stop conditions
         if self.stop.try_recv() == Ok(()) || Instant::now() > self.stop_time {
             return None;
+        }
+
+        // Null move Pruning
+        if depth > 3 && !board.is_late_endgame() && !board.in_check() {
+            let mut board2 = board.clone();
+            board2.black ^= true;
+            board2.remove_takeable_empty();
+            board2.update_hash(&board);
+
+            let score = -self.alphabeta(board2, -cut - 4, -cut, depth - 3)?;
+
+            if score > cut {
+                return Some(score)
+            }
         }
 
         let mut generator = self.gens.pop().unwrap_or(MoveGenerator::empty());
@@ -302,13 +324,17 @@ impl Searcher {
             // Late Move Reductions
             let mut reduction = 1;
 
-            if depth > 2 && i > 3 && !pv_node && !board.in_check() && !board2.in_check() {
-                reduction = 3;
+            if !board.in_check() && !board2.in_check() && !pv_node {
+                if depth > 2 && i > 3 {
+                    reduction = 2
+                }
             }
 
             // Principle Variation Search
             if pvs {
+                self.prev_pos.insert(board.hash);
                 let s = -self.alphabeta(board2.clone(), -alpha - 4, -alpha, depth - reduction)?;
+                self.prev_pos.remove(&board.hash);
 
                 if s <= alpha {
                     continue;
@@ -316,7 +342,9 @@ impl Searcher {
             }
 
             // Alpha-Beta
+            self.prev_pos.insert(board.hash);
             let score = -self.alphabeta(board2.clone(), -beta, -alpha, depth - reduction)?;
+            self.prev_pos.remove(&board.hash);
 
             if score >= cut {
                 std::mem::drop(iter);

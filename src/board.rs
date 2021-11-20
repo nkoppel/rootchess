@@ -64,7 +64,7 @@ pub fn str_from_sq(sq: usize) -> String {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct Board{
+pub struct Board {
     pub b: u64x4,
     pub black: bool,
     pub hash: u64
@@ -335,6 +335,10 @@ impl Board {
         out.init_hash();
         out
     }
+
+    pub fn is_late_endgame(&self) -> bool {
+        self.pawns() | self.kings() == self.occ()
+    }
 }
 
 pub struct Hasher {
@@ -459,6 +463,15 @@ fn t_fen() {
 
     assert_eq!(board, Board::from_fen(&board.to_fen(false)));
     assert_eq!(board, Board::from_fen(&board.to_fen(true)));
+}
+
+#[test]
+fn t_late_endgame() {
+    let board1 = Board::from_fen(START_FEN);
+    let board2 = Board::from_fen("8/8/3p4/2kPK3/8/8/8/8 w - -");
+
+    assert_eq!(board1.is_late_endgame(), false);
+    assert_eq!(board2.is_late_endgame(), true);
 }
 
 #[bench]

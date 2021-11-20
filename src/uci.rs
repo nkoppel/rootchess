@@ -9,7 +9,7 @@ use super::*;
 
 #[derive(Clone, Debug)]
 pub enum SearcherCommand {
-    SetBoard(Board),
+    SetBoard(Board, Vec<Move>),
     SetDebug(bool),
     SetC960(bool),
     Search(Duration, u8),
@@ -22,6 +22,7 @@ pub use SearcherCommand::*;
 impl Searcher {
     pub fn listen(&mut self) {
         let mut board = Board::from_fen(START_FEN);
+        let mut moves = Vec::new();
 
         while let Ok(msg) = self.recv.recv() {
             match msg {
@@ -56,10 +57,20 @@ impl Searcher {
                 }
                 Search(time, d) => {
                     self.stop_time = Instant::now() + time;
-                    self.search(board.clone(), d.min(1), d);
+                    self.prev_pos.clear();
+
+                    let mut board2 = board.clone();
+
+                    for m in &moves {
+                        self.prev_pos.insert(board2.hash);
+                        board2 = board2.do_move(*m);
+                    }
+
+                    self.search(board2.clone(), d.min(1), d);
                 },
-                SetBoard(b) => {
+                SetBoard(b, m) => {
                     board = b;
+                    moves = m;
                     self.incr_time();
                 },
                 SetC960(b) => self.c960 = b,
@@ -194,6 +205,7 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
 
     let mut c960 = false;
     let mut board = Board::from_fen(START_FEN);
+    let mut moves = Vec::new();
 
     'outer: loop {
         match words.next() {
@@ -226,43 +238,42 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
 
                 let _ = words.next();
 
-                for mov in words {
-                    board = board.do_move(Move::from_uci(mov));
-                }
+                moves = words.map(|w| Move::from_uci(w)).collect::<Vec<_>>();
+
                 line = lines.next().unwrap().unwrap();
                 words = line.split_whitespace();
 
-                threads.send_all(SetBoard(board.clone()));
+                threads.send_all(SetBoard(board.clone(), moves.clone()));
             },
             Some("getposition") => {
-                println!("info string {} 0 0", board.to_fen(c960));
+                let board2 = moves.iter().fold(board.clone(), |b, m| b.do_move(*m));
+
+                println!("info string {} 0 0", board2.to_fen(c960));
             }
             Some("domoves") => {
-                for mov in words {
-                    board = board.do_move(Move::from_uci(mov));
-                }
+                moves.extend(words.map(|w| Move::from_uci(w)));
+
                 line = lines.next().unwrap().unwrap();
                 words = line.split_whitespace();
 
-                threads.send_all(SetBoard(board.clone()));
+                threads.send_all(SetBoard(board.clone(), moves.clone()));
             }
             Some("dobestmove") => {
-                let mut reps = words
+                let reps = words
                     .next()
                     .unwrap_or("1")
                     .parse::<usize>()
                     .unwrap_or(1);
 
-                while let Some(mov) = searcher.get_best_move(&board) {
-                    board = board.do_move(mov);
-
-                    reps -= 1;
-                    if reps == 0 {
+                for _ in 0..reps {
+                    if let Some(mov) = searcher.get_best_move(&board) {
+                        moves.push(mov);
+                    } else {
                         break;
                     }
                 }
 
-                threads.send_all(SetBoard(board.clone()));
+                threads.send_all(SetBoard(board.clone(), moves.clone()));
             }
             Some("waitonsearch") => {
                 threads.send_all(Exit);
@@ -432,7 +443,7 @@ pub fn perftmanager(ttsize: usize, threads: usize, board: Board, depth: usize) {
     let moves = Arc::new(Mutex::new(moves));
     let total = Arc::new(AtomicU64::new(0));
 
-    threads.send_all(SetBoard(board.clone()));
+    threads.send_all(SetBoard(board.clone(), Vec::new()));
     threads.send_all(SearchPerft(depth, moves.clone(), total.clone()));
     threads.send_all(Exit);
 
