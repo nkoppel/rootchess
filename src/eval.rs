@@ -132,6 +132,12 @@ impl Board {
         out
     }
 
+    pub fn eval_mvv_lva(&self, mov: &Board) -> i32 {
+        let mut board = self.clone();
+        board.b &= !(self.b ^ mov.b).or();
+        board.eval_material()
+    }
+
     fn square_value(&self, black: bool, sq: usize) -> i32 {
         invert_if(black, PIECE_VALUE[self.get_square(sq as u8) as usize])
     }

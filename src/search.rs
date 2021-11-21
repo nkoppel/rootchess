@@ -23,7 +23,7 @@ pub struct Searcher {
     time: u8,
     stop_time: Instant,
     prev_pos: HashSet<u64>,
-    history: [[isize; 64]; 64],
+    history: [[[usize; 64]; 64]; 2],
     tt: TT,
     pawn_tt: TT,
     recv: Receiver<SearcherCommand>,
@@ -86,7 +86,7 @@ impl Searcher {
             stop_time: Instant::now() + Duration::from_secs(3155760000),
             curr_depth: 0,
             prev_pos: HashSet::new(),
-            history: [[0isize; 64]; 64],
+            history: [[[0usize; 64]; 64]; 2],
             tt,
             pawn_tt,
             recv,
@@ -105,7 +105,7 @@ impl Searcher {
             stop_time: Instant::now() + Duration::from_secs(3155760000),
             curr_depth: 0,
             prev_pos: HashSet::new(),
-            history: [[0isize; 64]; 64],
+            history: [[[0usize; 64]; 64]; 2],
             tt: TT::with_len(ttsize),
             pawn_tt: TT::with_len(1024),
             recv: channel().1,
@@ -176,7 +176,7 @@ impl Searcher {
         generator.set_board(board.clone());
         generator.gen_tactical();
         generator.moves.sort_by_cached_key(|b| {
-            invert_if(!board.black, board.eval_see(b))
+            invert_if(!board.black, board.eval_mvv_lva(b))
         });
         let mut iter = generator.moves.drain(..);
 
@@ -300,13 +300,14 @@ impl Searcher {
         } else {
             moves.sort_by_cached_key(|b| {
                 if Some(b.clone()) == best_move {
-                    0
+                    -1000000
                 } else if board.is_capture(&b) {
-                    1000000 + board.eval_see(&b) as isize
+                    -board.eval_see(&b) as i64
                 } else {
                     let mov = board.get_move(&b, self.c960);
 
-                    2000000 + self.history[mov.start()][mov.end()]
+                    1000000
+                    - self.history[board.black as usize][mov.start()][mov.end()] as i64
                 }
             });
         }
@@ -323,6 +324,8 @@ impl Searcher {
                     // continue;
                 // }
             // }
+
+            let mov = board.get_move(&board2, self.c960);
 
             // Late Move Reductions
             let mut reduction = 1;
@@ -355,12 +358,13 @@ impl Searcher {
                 self.gens.push(generator);
 
                 let out = ibv_min(score);
-                let mov = board.get_move(&board2, self.c960);
 
                 self.write_tt(board.hash, out, depth, mov);
 
+                // History Heuristic
                 if !board.is_capture(&board2) {
-                    self.history[mov.start()][mov.end()] += depth as isize * depth as isize;
+                    self.history[board.black as usize][mov.start()][mov.end()] +=
+                        depth as usize * depth as usize;
                 }
 
                 return Some(out);
