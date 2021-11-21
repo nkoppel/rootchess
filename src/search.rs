@@ -23,6 +23,7 @@ pub struct Searcher {
     time: u8,
     stop_time: Instant,
     prev_pos: HashSet<u64>,
+    history: [[isize; 64]; 64],
     tt: TT,
     pawn_tt: TT,
     recv: Receiver<SearcherCommand>,
@@ -85,6 +86,7 @@ impl Searcher {
             stop_time: Instant::now() + Duration::from_secs(3155760000),
             curr_depth: 0,
             prev_pos: HashSet::new(),
+            history: [[0isize; 64]; 64],
             tt,
             pawn_tt,
             recv,
@@ -103,6 +105,7 @@ impl Searcher {
             stop_time: Instant::now() + Duration::from_secs(3155760000),
             curr_depth: 0,
             prev_pos: HashSet::new(),
+            history: [[0isize; 64]; 64],
             tt: TT::with_len(ttsize),
             pawn_tt: TT::with_len(1024),
             recv: channel().1,
@@ -173,7 +176,7 @@ impl Searcher {
         generator.set_board(board.clone());
         generator.gen_tactical();
         generator.moves.sort_by_cached_key(|b| {
-            invert_if(!board.black, board.eval_mvv_lva(b))
+            invert_if(!board.black, board.eval_see(b))
         });
         let mut iter = generator.moves.drain(..);
 
@@ -297,13 +300,13 @@ impl Searcher {
         } else {
             moves.sort_by_cached_key(|b| {
                 if Some(b.clone()) == best_move {
-                    -1000000
+                    0
+                } else if board.is_capture(&b) {
+                    1000000 + board.eval_see(&b) as isize
                 } else {
-                    if let Some(d) = self.tt.read(b.hash) {
-                        unpack_search(d).0
-                    } else {
-                        generator.eval(b.clone(), &mut self.pawn_tt) * 4
-                    }
+                    let mov = board.get_move(&b, self.c960);
+
+                    2000000 + self.history[mov.start()][mov.end()]
                 }
             });
         }
@@ -330,7 +333,7 @@ impl Searcher {
                 }
             }
 
-            // Principle Variation Search
+            // Principal Variation Search
             if pvs {
                 self.prev_pos.insert(board.hash);
                 let s = -self.alphabeta(board2.clone(), -alpha - 4, -alpha, depth - reduction)?;
@@ -355,6 +358,10 @@ impl Searcher {
                 let mov = board.get_move(&board2, self.c960);
 
                 self.write_tt(board.hash, out, depth, mov);
+
+                if !board.is_capture(&board2) {
+                    self.history[mov.start()][mov.end()] += depth as isize * depth as isize;
+                }
 
                 return Some(out);
             }

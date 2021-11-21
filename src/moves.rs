@@ -19,12 +19,12 @@ impl Move {
     }
 
     pub fn unpack(&self) -> (usize, usize, usize) {
-        (self.get_start(), self.get_end(), self.get_piece())
+        (self.start(), self.end(), self.piece())
     }
 
-    pub fn get_start(&self) -> usize { (self.0 >> 10 & SQUARE) as usize }
-    pub fn get_end  (&self) -> usize { (self.0 >> 4  & SQUARE) as usize }
-    pub fn get_piece(&self) -> usize { (self.0       & PIECE ) as usize }
+    pub fn start(&self) -> usize { (self.0 >> 10 & SQUARE) as usize }
+    pub fn end  (&self) -> usize { (self.0 >> 4  & SQUARE) as usize }
+    pub fn piece(&self) -> usize { (self.0       & PIECE ) as usize }
 
     pub fn from_uci(s: &str) -> Self {
         s.parse().unwrap()
@@ -35,10 +35,10 @@ use std::fmt;
 
 impl fmt::Display for Move {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", str_from_sq(self.get_start()))?;
-        write!(f, "{}", str_from_sq(self.get_end()))?;
+        write!(f, "{}", str_from_sq(self.start()))?;
+        write!(f, "{}", str_from_sq(self.end()))?;
 
-        let piece = self.get_piece();
+        let piece = self.piece();
 
         if piece != 0 {
             write!(f, "{}", &FEN_PIECES[piece + 8..piece + 9])?;
@@ -226,6 +226,25 @@ impl Board {
 
             Move::pack(start, end, piece)
         }
+    }
+
+    pub fn is_capture(&self, other: &Board) -> bool {
+        let diff = {
+            let mut s = self.clone();
+            let mut o = other.clone();
+
+            s.remove_takeable_empty();
+            o.remove_takeable_empty();
+
+            s.b ^= u64x4::new(0,0,0, s.castling_rooks());
+            o.b ^= u64x4::new(0,0,0, o.castling_rooks());
+
+            (s.b ^ o.b).or()
+        };
+
+        self.occ() & diff == diff &&
+            (self .occ() & diff).count_ones() == 2 &&
+            (other.occ() & diff).count_ones() == 1
     }
 }
 

@@ -29,9 +29,20 @@ fn gen_bishop_moves(sq: usize, mut occ: u64) -> u64 {
 }
 
 impl Board {
-    pub fn get_threats(&self, sq: usize) -> u64 {
+    pub fn get_att_def(&self, occ: u64, sq: usize) -> u64 {
         let mut out = 0;
-        let occ = self.occ();
+
+        out |= TABLES.white_pawn_takes[sq] & self.black_pawns();
+        out |= TABLES.black_pawn_takes[sq] & self.white_pawns();
+        out |= TABLES.knight[sq] & self.knights();
+        out |= gen_bishop_moves(sq, occ) & (self.bishops() | self.queens());
+        out |= gen_rook_moves(sq, occ)   & (self.rooks()   | self.queens());
+
+        out & occ
+    }
+
+    pub fn get_threats_with_occ(&self, occ: u64, sq: usize) -> u64 {
+        let mut out = 0;
 
         let opp_occ;
         let cur_pawn_takes;
@@ -50,6 +61,10 @@ impl Board {
         out |= gen_rook_moves(sq, occ)   & (self.rooks()   | self.queens());
 
         out & opp_occ
+    }
+
+    pub fn get_threats(&self, sq: usize) -> u64 {
+        self.get_threats_with_occ(self.occ(), sq)
     }
 
     pub fn get_checks(&self) -> u64 {

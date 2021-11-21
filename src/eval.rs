@@ -53,6 +53,27 @@ const KNIGHT_WEIGHT: i32 = 300;
 const BISHOP_WEIGHT: i32 = 300;
 const ROOK_WEIGHT  : i32 = 500;
 const QUEEN_WEIGHT : i32 = 900;
+const KING_WEIGHT  : i32 = 25600;
+
+const PIECE_VALUE: [i32; 16] =
+    [
+        0,
+        PAWN_WEIGHT,
+        KNIGHT_WEIGHT,
+        BISHOP_WEIGHT,
+        QUEEN_WEIGHT,
+        25600,
+        ROOK_WEIGHT,
+        ROOK_WEIGHT,
+        0,
+        -PAWN_WEIGHT,
+        -KNIGHT_WEIGHT,
+        -BISHOP_WEIGHT,
+        -QUEEN_WEIGHT,
+        -25600,
+        -ROOK_WEIGHT,
+        -ROOK_WEIGHT,
+    ];
 
 // const CENTER: u64 = 0x00003C3C3C3C0000;
 const CENTER: u64 = 0x0000001818000000;
@@ -111,10 +132,74 @@ impl Board {
         out
     }
 
-    pub fn eval_mvv_lva(&self, mov: &Board) -> i32 {
-        let mut board = self.clone();
-        board.b &= !(self.b ^ mov.b).or();
-        board.eval_material()
+    fn square_value(&self, black: bool, sq: usize) -> i32 {
+        invert_if(black, PIECE_VALUE[self.get_square(sq as u8) as usize])
+    }
+
+    fn get_least_valuable(&self, mut att_def: u64, black: bool) -> u64 {
+        if black {
+            att_def &= self.black();
+        } else {
+            att_def &= self.white();
+        }
+
+        let mut out = 0;
+
+        // if att_def & self.pawns() != 0 {return att_def & self.pawns()}
+             if let n@1.. = att_def & self.pawns  () {out = n}
+        else if let n@1.. = att_def & self.knights() {out = n}
+        else if let n@1.. = att_def & self.bishops() {out = n}
+        else if let n@1.. = att_def & self.rooks  () {out = n}
+        else if let n@1.. = att_def & self.queens () {out = n}
+        else if let n@1.. = att_def & self.kings  () {out = n}
+
+        out & !(out.overflowing_sub(1).0)
+    }
+
+    pub fn eval_see(&self, mov: &Board) -> i32 {
+        let mov = self.get_move(mov, true);
+        let xray = self.pawns() | self.bishops() | self.rooks() | self.queens();
+
+        let to_sq = mov.end();
+        let from_sq = mov.start();
+
+        let mut d = 0;
+        let mut black = self.black;
+
+        let mut gain = [0; 32];
+        let mut occ = self.occ();
+        let mut att_def = self.get_att_def(occ, mov.end());
+        let mut from = 1u64 << from_sq;
+
+        gain[0] = self.square_value(!black, to_sq);
+
+        while from != 0 {
+            d += 1;
+
+            gain[d] = self.square_value(black, from.trailing_zeros() as usize) - gain[d - 1];
+
+            if gain[d].max(-gain[d - 1]) < 0 {break}
+
+            att_def ^= from;
+            occ     ^= from;
+
+            if from & xray != 0 {
+                att_def = self.get_att_def(occ, mov.end());
+
+            }
+
+            from = self.get_least_valuable(att_def, !black);
+            black ^= true;
+        }
+
+        d -= 1;
+
+        while d > 0 {
+            gain[d - 1] = -gain[d].max(-gain[d - 1]);
+            d -= 1;
+        }
+
+        return gain[0]
     }
 
     fn eval_pawns(&self, p_hash: &mut TT) -> i32 {
@@ -284,12 +369,34 @@ fn t_eval_pawns() {
     assert_eq!(board.eval_pawns(&mut tt), 2 * CHAIN_WEIGHT + 2 * DOUBLED_WEIGHT + ISOLATED_WEIGHT - PASSED_WEIGHT);
 }
 
+#[test]
+fn t_eval_see() {
+    // tests are from https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm
+    let board1 = Board::from_fen("1k1r4/1pp4p/p7/4p3/8/P5P1/1PP4P/2K1R3 w - -");
+    let board2 = Board::from_fen("1k1r4/1pp4p/p7/4R3/8/P5P1/1PP4P/2K5 b - -");
+
+    assert_eq!(board1.eval_see(&board2), PAWN_WEIGHT);
+
+    let board1 = Board::from_fen("1k1r3q/1ppn3p/p4b2/4p3/8/P2N2P1/1PP1R1BP/2K1Q3 w - -");
+    let board2 = Board::from_fen("1k1r3q/1ppn3p/p4b2/4N3/8/P5P1/1PP1R1BP/2K1Q3 b - -");
+
+    assert_eq!(board1.eval_see(&board2), PAWN_WEIGHT - KNIGHT_WEIGHT);
+}
+
 // #[test]
 // fn t_eval_king() {
     // let mut generator = MoveGenerator::new(Board::from_fen("3rrqrr/8/8/8/8/8/5PPP/6K1 w - -"));
 
     // assert_eq!(generator.eval_king(), KING_PAWN_WEIGHT * 3 - 2 - 40)
 // }
+
+#[bench]
+fn b_eval_see(b: &mut Bencher) {
+    let board1 = Board::from_fen("1k1r4/1pp4p/p7/4p3/8/P5P1/1PP4P/2K1R3 w - -");
+    let board2 = Board::from_fen("1k1r4/1pp4p/p7/4R3/8/P5P1/1PP4P/2K5 b - -");
+
+    b.iter(|| test::black_box(&board1).eval_see(&board2))
+}
 
 #[bench]
 fn b_eval(b: &mut Bencher) {

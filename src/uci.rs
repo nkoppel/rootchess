@@ -66,6 +66,8 @@ impl Searcher {
                         board2 = board2.do_move(*m);
                     }
 
+                    self.history = [[0; 64]; 64];
+
                     self.search(board2.clone(), d.min(1), d);
                 },
                 SetBoard(b, m) => {
