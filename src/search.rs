@@ -61,6 +61,10 @@ pub fn ibv_exact(n: i32) -> i32 {  (n + 1) & !3 }
 pub fn ibv_min  (n: i32) -> i32 { ((n + 1) & !3) + 1 }
 pub fn ibv_max  (n: i32) -> i32 { ((n + 1) & !3) - 1 }
 
+pub fn ibv_is_exact(n: i32) -> bool {n & 3 == 0}
+pub fn ibv_is_lower(n: i32) -> bool {n & 3 == 1}
+pub fn ibv_is_upper(n: i32) -> bool {n & 3 == 3}
+
 pub fn from_ibv(n: i32) -> i32 { ibv_exact(n) / 4 }
 
 pub fn show_ibv(n: i32) -> String {
@@ -202,9 +206,16 @@ impl Searcher {
         let (hash2, res) = self.tt.force_read(hash);
         let (score2, time2, depth2, mov2) = unpack_search(res);
 
-        if hash2 == hash && depth2 > depth && time2 != self.time {
-            self.tt.write(hash, pack_search(score2, self.time, depth2, mov2));
-        } else if depth >= depth2 || time2 != self.time {
+        if hash == hash2 {
+            if depth > depth2 || depth == depth2
+                && (ibv_is_exact(score) && !ibv_is_exact(score2)
+                || mov.0 != 0 && mov2.0 == 0)
+            {
+                self.tt.write(hash, pack_search(score, self.time, depth, mov));
+            } else {
+                self.tt.write(hash, pack_search(score2, self.time, depth2, mov2));
+            }
+        } else if depth >= depth2 || self.time != time2 {
             self.tt.write(hash, pack_search(score, self.time, depth, mov));
         }
     }
@@ -229,7 +240,6 @@ impl Searcher {
         let cut = ibv_exact(beta);
         let mut best_move = None;
         let mut pvs = false;
-        let mut pv_node = false;
 
         if let Some(d) = self.tt.read(board.hash) {
             let (score, _, depth2, mov) = unpack_search(d);
@@ -241,10 +251,6 @@ impl Searcher {
                     3 if score <  alpha => return Some(alpha),
                     _ => {}
                 }
-            }
-
-            if score & 3 == 0 {
-                pv_node = true;
             }
 
             if mov != Move(0) {
@@ -330,7 +336,7 @@ impl Searcher {
             // Late Move Reductions
             let mut reduction = 1;
 
-            if !board.in_check() && !board2.in_check() && !pv_node {
+            if !board.in_check() && !board2.in_check() && beta - alpha <= 4 {
                 if depth > 2 && i > 3 {
                     reduction = 2
                 }
