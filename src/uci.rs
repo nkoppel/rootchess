@@ -267,8 +267,10 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                     .parse::<usize>()
                     .unwrap_or(1);
 
+                let board2 = moves.iter().fold(board.clone(), |b, m| b.do_move(*m));
+
                 for _ in 0..reps {
-                    if let Some(mov) = searcher.get_best_move(&board) {
+                    if let Some(mov) = searcher.get_best_move(&board2) {
                         moves.push(mov);
                     } else {
                         break;
@@ -350,7 +352,7 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                             }
                         }
                         "wtime" | "btime" => {
-                            if board.black == (w == "btime") {
+                            if board.black ^ (moves.len() & 1 != 0) == (w == "btime") {
                                 if let Some(w) = words.next() {
                                     if let Ok(t) = w.parse::<u64>() {
                                         time = Duration::from_millis(t);
@@ -359,7 +361,7 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                             }
                         }
                         "winc" | "binc" => {
-                            if board.black == (w == "btime") {
+                            if board.black ^ (moves.len() & 1 != 0) == (w == "binc") {
                                 if let Some(w) = words.next() {
                                     if let Ok(t) = w.parse::<u64>() {
                                         inc = Duration::from_millis(t);
