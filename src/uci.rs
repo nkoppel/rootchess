@@ -198,14 +198,14 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
     let     pawn_tt = TT::with_len(62500);
 
     let mut generator = MoveGenerator::empty();
-    let     searcher = Searcher::new(tt.clone(), pawn_tt.clone(), channel().1, channel().1, 0);
-    let mut threads = ThreadPool::new(tt.clone(), pawn_tt.clone(), 1);
+    let     searcher  = Searcher::new(tt.clone(), pawn_tt.clone(), channel().1, channel().1, 0);
+    let mut threads   = ThreadPool::new(tt.clone(), pawn_tt.clone(), 1);
 
     let mut lines = read.lines();
-    let mut line = lines.next().unwrap().unwrap();
+    let mut line  = lines.next().unwrap().unwrap();
     let mut words = line.split_whitespace();
 
-    let mut c960 = false;
+    let mut c960  = false;
     let mut board = Board::from_fen(START_FEN);
     let mut moves = Vec::new();
 
@@ -334,9 +334,11 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                 let mut movetime = Duration::from_secs(0);
                 let mut inc = Duration::from_secs(0);
                 let mut movestogo = 30;
+                let mut ponder = false;
 
                 while let Some(w) = words.next() {
                     match w {
+                        "ponder" => ponder = true,
                         "depth" => {
                             if let Some(w) = words.next() {
                                 if let Ok(d) = w.parse::<u8>() {
@@ -409,6 +411,25 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
 
                     if time.saturating_sub(movetime) < margin {
                         movetime = time - margin
+                    }
+                }
+
+                if ponder {
+                    threads.stop_all();
+                    threads.send_all(Search(Duration::from_secs(3155760000), 255));
+
+                    if let Some(Ok(l)) = lines.next() {
+                        line = l;
+                        words = line.split_whitespace();
+
+                        if words.next() != Some("ponderhit") {
+                            words = line.split_whitespace();
+                            continue;
+                        }
+                    } else {
+                        threads.send_all(Exit);
+                        threads.join();
+                        break;
                     }
                 }
 

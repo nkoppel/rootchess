@@ -80,7 +80,13 @@ pub fn show_ibv(n: i32) -> String {
 }
 
 impl Searcher {
-    pub fn new(tt: TT, pawn_tt: TT, recv: Receiver<SearcherCommand>, stop: Receiver<()>, id: usize) -> Self {
+    pub fn new(tt: TT,
+               pawn_tt: TT,
+               recv: Receiver<SearcherCommand>,
+               stop: Receiver<()>,
+               id: usize)
+        -> Self
+        {
         Self {
             gens: Vec::new(),
             c960: false,
