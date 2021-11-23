@@ -458,7 +458,7 @@ impl Searcher {
         println!();
     }
 
-    pub fn search(&mut self, board: Board, min_depth: u8, max_depth: u8)
+    pub fn search(&mut self, ponder: bool, board: Board, min_depth: u8, max_depth: u8)
         -> i32
     {
         let mut score = 0;
@@ -485,7 +485,7 @@ impl Searcher {
             }
         }
 
-        if self.id == 0 {
+        if self.id == 0 && !ponder {
             if let Some(mov1) = self.get_best_move(&board) {
                 print!("bestmove {} ", mov1);
 

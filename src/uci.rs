@@ -12,7 +12,7 @@ pub enum SearcherCommand {
     SetBoard(Board, Vec<Move>),
     SetDebug(bool),
     SetC960(bool),
-    Search(Duration, u8),
+    Search(bool, Duration, u8),
     SearchPerft(usize, Arc<Mutex<Vec<Move>>>, Arc<AtomicU64>),
     Exit
 }
@@ -55,7 +55,7 @@ impl Searcher {
                         self.tt.clear();
                     }
                 }
-                Search(time, d) => {
+                Search(ponder, time, d) => {
                     self.stop_time = Instant::now() + time;
                     self.prev_pos.clear();
 
@@ -68,7 +68,7 @@ impl Searcher {
 
                     self.history = [[[0usize; 64]; 64]; 2];
 
-                    self.search(board2.clone(), d.min(1), d);
+                    self.search(ponder, board2.clone(), d.min(1), d);
                 },
                 SetBoard(b, m) => {
                     board = b;
@@ -416,7 +416,7 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
 
                 if ponder {
                     threads.stop_all();
-                    threads.send_all(Search(Duration::from_secs(3155760000), 255));
+                    threads.send_all(Search(true, Duration::from_secs(3155760000), 255));
 
                     if let Some(Ok(l)) = lines.next() {
                         line = l;
@@ -434,7 +434,7 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                 }
 
                 threads.stop_all();
-                threads.send_all(Search(movetime, depth));
+                threads.send_all(Search(false, movetime, depth));
             }
             Some("stop") => threads.stop_all(),
             Some("quit") => break,
