@@ -422,8 +422,9 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                         line = l;
                         words = line.split_whitespace();
 
-                        if words.next() != Some("ponderhit") {
+                        if words.next() == Some("ponderhit") {
                             threads.stop_all(false);
+                        } else {
                             words = line.split_whitespace();
                             continue;
                         }

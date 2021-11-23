@@ -474,7 +474,10 @@ impl Searcher {
 
             match self.alphabeta(board.clone(), -2000000, 2000000, depth) {
                 Ok(s) => score = s,
-                Err(o) => output_best_move = o,
+                Err(o) => {
+                    output_best_move = o;
+                    break;
+                }
             }
 
             if self.id == 0 {
