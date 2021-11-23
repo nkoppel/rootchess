@@ -249,7 +249,7 @@ impl Searcher {
             return Some(self.quiesce(board, alpha, beta));
         }
         // Threefold repetition
-        if let Some(3..) = self.prev_pos.get(&board.hash) {
+        if let Some(2..) = self.prev_pos.get(&board.hash) {
             return Some(0);
         }
 
