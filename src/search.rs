@@ -27,7 +27,7 @@ pub struct Searcher {
     tt: TT,
     pawn_tt: TT,
     recv: Receiver<SearcherCommand>,
-    stop: Receiver<()>,
+    stop: Receiver<bool>,
     id: usize,
 }
 
@@ -83,7 +83,7 @@ impl Searcher {
     pub fn new(tt: TT,
                pawn_tt: TT,
                recv: Receiver<SearcherCommand>,
-               stop: Receiver<()>,
+               stop: Receiver<bool>,
                id: usize)
         -> Self
         {
@@ -246,14 +246,14 @@ impl Searcher {
                      mut alpha: i32,
                      beta: i32,
                      depth: u8)
-        -> Option<i32>
+        -> Result<i32, bool>
     {
         if depth == 0 {
-            return Some(self.quiesce(board, alpha, beta));
+            return Ok(self.quiesce(board, alpha, beta));
         }
         // Threefold repetition
         if let Some(2..) = self.prev_pos.get(&board.hash) {
-            return Some(0);
+            return Ok(0);
         }
 
         let orig_alpha = alpha;
@@ -267,9 +267,9 @@ impl Searcher {
 
             if depth2 >= depth {
                 match score & 3 {
-                    0 => return Some(score),
-                    1 if score >= cut   => return Some(score),
-                    3 if score <  alpha => return Some(alpha),
+                    0 => return Ok(score),
+                    1 if score >= cut   => return Ok(score),
+                    3 if score <  alpha => return Ok(alpha),
                     _ => {}
                 }
             }
@@ -280,8 +280,10 @@ impl Searcher {
         }
 
         // Check for stop conditions
-        if self.stop.try_recv() == Ok(()) || Instant::now() > self.stop_time {
-            return None;
+        if let Ok(b) = self.stop.try_recv() {
+            return Err(b)
+        } else if Instant::now() > self.stop_time {
+            return Err(true);
         }
 
         // Null move Pruning
@@ -294,7 +296,7 @@ impl Searcher {
             let score = -self.alphabeta(board2, -cut - 4, -cut, depth - 3)?;
 
             if score > cut {
-                return Some(score)
+                return Ok(score)
             }
         }
 
@@ -305,9 +307,9 @@ impl Searcher {
 
         if generator.moves.is_empty() {
             if generator.get_checks() == 0 {
-                return Some(0);
+                return Ok(0);
             } else {
-                return Some(-25600 * 4);
+                return Ok(-25600 * 4);
             }
         }
 
@@ -394,7 +396,7 @@ impl Searcher {
                         depth as usize * depth as usize;
                 }
 
-                return Some(out);
+                return Ok(out);
             }
             if score > alpha {
                 alpha = score;
@@ -418,10 +420,10 @@ impl Searcher {
 
         if alpha != orig_alpha {
             self.write_tt(board.hash, alpha, depth, mov);
-            Some(alpha)
+            Ok(alpha)
         } else {
             self.write_tt(board.hash, ibv_max(alpha), depth, mov);
-            Some(alpha)
+            Ok(alpha)
         }
     }
 
@@ -458,21 +460,21 @@ impl Searcher {
         println!();
     }
 
-    pub fn search(&mut self, ponder: bool, board: Board, min_depth: u8, max_depth: u8)
+    pub fn search(&mut self, board: Board, min_depth: u8, max_depth: u8)
         -> i32
     {
         let mut score = 0;
+        let mut output_best_move = true;
 
-        while let Ok(()) = self.stop.try_recv() {}
+        while let Ok(_) = self.stop.try_recv() {}
         self.gens.clear();
 
         for depth in min_depth..=max_depth {
             self.curr_depth = depth;
 
-            if let Some(s) = self.alphabeta(board.clone(), -2000000, 2000000, depth) {
-                score = s;
-            } else {
-                break;
+            match self.alphabeta(board.clone(), -2000000, 2000000, depth) {
+                Ok(s) => score = s,
+                Err(o) => output_best_move = o,
             }
 
             if self.id == 0 {
@@ -485,7 +487,7 @@ impl Searcher {
             }
         }
 
-        if self.id == 0 && !ponder {
+        if self.id == 0 && output_best_move {
             if let Some(mov1) = self.get_best_move(&board) {
                 print!("bestmove {} ", mov1);
 

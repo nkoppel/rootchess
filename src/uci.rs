@@ -12,7 +12,7 @@ pub enum SearcherCommand {
     SetBoard(Board, Vec<Move>),
     SetDebug(bool),
     SetC960(bool),
-    Search(bool, Duration, u8),
+    Search(Duration, u8),
     SearchPerft(usize, Arc<Mutex<Vec<Move>>>, Arc<AtomicU64>),
     Exit
 }
@@ -55,7 +55,7 @@ impl Searcher {
                         self.tt.clear();
                     }
                 }
-                Search(ponder, time, d) => {
+                Search(time, d) => {
                     self.stop_time = Instant::now() + time;
                     self.prev_pos.clear();
 
@@ -68,7 +68,7 @@ impl Searcher {
 
                     self.history = [[[0usize; 64]; 64]; 2];
 
-                    self.search(ponder, board2.clone(), d.min(1), d);
+                    self.search(board2.clone(), d.min(1), d);
                 },
                 SetBoard(b, m) => {
                     board = b;
@@ -86,7 +86,7 @@ impl Searcher {
 struct ThreadPool {
     threads: Vec<JoinHandle<()>>,
     sends: Vec<Sender<SearcherCommand>>,
-    stops: Vec<Sender<()>>,
+    stops: Vec<Sender<bool>>,
     tt: TT,
     pawn_tt: TT,
     tasks: Vec<usize>,
@@ -138,7 +138,7 @@ impl ThreadPool {
             if !self.threads.is_empty() {
                 let thread = self.threads.len() - 1;
 
-                self.stops[thread].send(()).unwrap();
+                self.stops[thread].send(false).unwrap();
                 self.send(thread, Exit);
 
                 self.threads.pop().unwrap().join().unwrap();
@@ -174,13 +174,13 @@ impl ThreadPool {
         }
     }
 
-    fn stop(&mut self, thread: usize) {
-        self.stops[thread].send(()).unwrap();
+    fn stop(&mut self, thread: usize, best: bool) {
+        self.stops[thread].send(best).unwrap();
     }
 
-    fn stop_all(&mut self) {
+    fn stop_all(&mut self, best: bool) {
         for t in 0..self.threads.len() {
-            self.stop(t);
+            self.stop(t, best);
         }
     }
 
@@ -415,14 +415,15 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                 }
 
                 if ponder {
-                    threads.stop_all();
-                    threads.send_all(Search(true, Duration::from_secs(3155760000), 255));
+                    threads.stop_all(true);
+                    threads.send_all(Search(Duration::from_secs(3155760000), 255));
 
                     if let Some(Ok(l)) = lines.next() {
                         line = l;
                         words = line.split_whitespace();
 
                         if words.next() != Some("ponderhit") {
+                            threads.stop_all(false);
                             words = line.split_whitespace();
                             continue;
                         }
@@ -433,10 +434,10 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                     }
                 }
 
-                threads.stop_all();
-                threads.send_all(Search(false, movetime, depth));
+                threads.stop_all(true);
+                threads.send_all(Search(movetime, depth));
             }
-            Some("stop") => threads.stop_all(),
+            Some("stop") => threads.stop_all(true),
             Some("quit") => break,
             Some(_) => {},
             None => {
