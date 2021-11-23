@@ -7,7 +7,7 @@ use crate::eval::*;
 use rand::{Rng, thread_rng};
 use std::time::{Duration, Instant};
 use std::sync::mpsc::{Receiver, channel};
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 #[path = "uci.rs"]
 pub mod uci;
@@ -22,7 +22,7 @@ pub struct Searcher {
     curr_depth: u8,
     time: u8,
     stop_time: Instant,
-    prev_pos: HashSet<u64>,
+    prev_pos: HashMap<u64,u8>,
     history: [[[usize; 64]; 64]; 2],
     tt: TT,
     pawn_tt: TT,
@@ -89,7 +89,7 @@ impl Searcher {
             time: 0,
             stop_time: Instant::now() + Duration::from_secs(3155760000),
             curr_depth: 0,
-            prev_pos: HashSet::new(),
+            prev_pos: HashMap::new(),
             history: [[[0usize; 64]; 64]; 2],
             tt,
             pawn_tt,
@@ -108,7 +108,7 @@ impl Searcher {
             time: 0,
             stop_time: Instant::now() + Duration::from_secs(3155760000),
             curr_depth: 0,
-            prev_pos: HashSet::new(),
+            prev_pos: HashMap::new(),
             history: [[[0usize; 64]; 64]; 2],
             tt: TT::with_len(ttsize),
             pawn_tt: TT::with_len(1024),
@@ -220,6 +220,24 @@ impl Searcher {
         }
     }
 
+    fn incr_prev_pos(&mut self, hash: u64) {
+        if let Some(i) = self.prev_pos.get_mut(&hash) {
+            *i += 1;
+        } else {
+            self.prev_pos.insert(hash, 1);
+        }
+    }
+
+    fn decr_prev_pos(&mut self, hash: u64) {
+        if let Some(i) = self.prev_pos.get_mut(&hash) {
+            *i -= 1;
+
+            if *i == 0 {
+                self.prev_pos.remove(&hash);
+            }
+        }
+    }
+
     pub fn alphabeta(&mut self,
                      board: Board,
                      mut alpha: i32,
@@ -230,8 +248,8 @@ impl Searcher {
         if depth == 0 {
             return Some(self.quiesce(board, alpha, beta));
         }
-        // Repeated positions are draws
-        if self.prev_pos.contains(&board.hash) {
+        // Threefold repetition
+        if let Some(3..) = self.prev_pos.get(&board.hash) {
             return Some(0);
         }
 
@@ -344,9 +362,9 @@ impl Searcher {
 
             // Principal Variation Search
             if pvs {
-                self.prev_pos.insert(board.hash);
+                self.incr_prev_pos(board.hash);
                 let s = -self.alphabeta(board2.clone(), -alpha - 4, -alpha, depth - reduction)?;
-                self.prev_pos.remove(&board.hash);
+                self.decr_prev_pos(board.hash);
 
                 if s <= alpha {
                     continue;
@@ -354,9 +372,9 @@ impl Searcher {
             }
 
             // Alpha-Beta
-            self.prev_pos.insert(board.hash);
+            self.incr_prev_pos(board.hash);
             let score = -self.alphabeta(board2.clone(), -beta, -alpha, depth - reduction)?;
-            self.prev_pos.remove(&board.hash);
+            self.decr_prev_pos(board.hash);
 
             if score >= cut {
                 std::mem::drop(iter);

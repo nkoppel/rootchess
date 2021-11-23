@@ -62,7 +62,7 @@ impl Searcher {
                     let mut board2 = board.clone();
 
                     for m in &moves {
-                        self.prev_pos.insert(board2.hash);
+                        self.incr_prev_pos(board2.hash);
                         board2 = board2.do_move(*m);
                     }
 
