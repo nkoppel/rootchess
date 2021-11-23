@@ -207,10 +207,7 @@ impl Searcher {
         let (score2, time2, depth2, mov2) = unpack_search(res);
 
         if hash == hash2 {
-            if depth > depth2 || depth == depth2
-                && (ibv_is_exact(score) && !ibv_is_exact(score2)
-                || mov.0 != 0 && mov2.0 == 0)
-            {
+            if depth >= depth2 {
                 self.tt.write(hash, pack_search(score, self.time, depth, mov));
             } else {
                 self.tt.write(hash, pack_search(score2, self.time, depth2, mov2));
