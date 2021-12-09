@@ -334,9 +334,9 @@ impl Searcher {
                     -board.eval_see(&b) as i64
                 } else {
                     let mov = board.get_move(&b, self.c960);
+                    let history = self.history[board.black as usize][mov.start()][mov.end()];
 
-                    1000000
-                    - self.history[board.black as usize][mov.start()][mov.end()] as i64
+                    1000000 - history as i64
                 }
             });
         }
@@ -345,24 +345,19 @@ impl Searcher {
         let mut i = 0;
 
         while let Some(board2) = iter.next() {
-            // // Razoring
-            // if depth == 2 {
-                // let score = -generator.eval(board2.clone(), &mut self.pawn_tt);
-
-                // if score < alpha {
-                    // continue;
-                // }
-            // }
-
             let mov = board.get_move(&board2, self.c960);
 
-            // Late Move Reductions
+            // Extensions and Reductions
             let mut reduction = 1;
 
+            // Late Move Reductions
             if !board.in_check() && !board2.in_check() && beta - alpha <= 4 {
                 if depth > 2 && i > 3 {
-                    reduction = 2
+                    reduction = 2;
                 }
+            } else if board2.in_check() {
+                // Check extensions
+                reduction = 0
             }
 
             // Principal Variation Search

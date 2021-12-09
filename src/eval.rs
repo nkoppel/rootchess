@@ -49,8 +49,8 @@ const QUEEN_MOVE_WEIGHT : i32 = 2;
 const KING_MOVE_WEIGHT  : i32 = 1;
 
 const PAWN_WEIGHT  : i32 = 100;
-const KNIGHT_WEIGHT: i32 = 300;
-const BISHOP_WEIGHT: i32 = 300;
+const KNIGHT_WEIGHT: i32 = 320;
+const BISHOP_WEIGHT: i32 = 330;
 const ROOK_WEIGHT  : i32 = 500;
 const QUEEN_WEIGHT : i32 = 900;
 const KING_WEIGHT  : i32 = 25600;
@@ -317,6 +317,8 @@ impl MoveGenerator {
                 moves &= self.blocks;
                 moves &= self.pins[sq];
 
+                moves &= !self.cur_occ;
+
                 out += region_bonus(CENTER, moves, mul * KNIGHT_MOVE_WEIGHT);
             }
 
@@ -333,6 +335,8 @@ impl MoveGenerator {
                 moves &= self.blocks;
                 moves &= self.pins[sq];
 
+                moves &= !self.cur_occ;
+
                 out += region_bonus(CENTER, moves, mul * BISHOP_MOVE_WEIGHT);
             }
 
@@ -343,6 +347,8 @@ impl MoveGenerator {
 
                 moves &= self.blocks;
                 moves &= self.pins[sq];
+
+                moves &= !self.cur_occ;
 
                 out += region_bonus(CENTER, moves, mul * ROOK_MOVE_WEIGHT);
             }
@@ -355,6 +361,8 @@ impl MoveGenerator {
 
                 moves &= self.blocks;
                 moves &= self.pins[sq];
+
+                moves &= !self.cur_occ;
 
                 out += region_bonus(CENTER, moves, mul * QUEEN_MOVE_WEIGHT);
             }
