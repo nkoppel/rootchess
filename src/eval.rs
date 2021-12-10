@@ -43,7 +43,7 @@ const KING_PAWN_WEIGHT: i32 = 10;
 const CASTLE_BONUS: i32 = 25;
 
 const KNIGHT_MOVE_WEIGHT: i32 = 10;
-const BISHOP_MOVE_WEIGHT: i32 = 5;
+const BISHOP_MOVE_WEIGHT: i32 = 10;
 const ROOK_MOVE_WEIGHT  : i32 = 5;
 const QUEEN_MOVE_WEIGHT : i32 = 2;
 const KING_MOVE_WEIGHT  : i32 = 1;
