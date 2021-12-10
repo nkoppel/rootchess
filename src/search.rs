@@ -266,6 +266,8 @@ impl Searcher {
             let (score, _, depth2, mov) = unpack_search(d);
 
             if depth2 >= depth {
+                self.write_tt(board.hash, score, depth, mov);
+
                 match score & 3 {
                     0 => return Ok(score),
                     1 if score >= cut   => return Ok(score),
@@ -460,6 +462,8 @@ impl Searcher {
     {
         let mut score = 0;
         let mut output_best_move = true;
+        let mut best_move = None;
+        let mut ponder_move = None;
 
         while let Ok(_) = self.stop.try_recv() {}
         self.gens.clear();
@@ -478,6 +482,14 @@ impl Searcher {
             if self.id == 0 {
                 print!("info depth {} seldepth {} score {} pv ", depth, self.gens.len(), show_ibv(score));
                 self.show_pv(depth as usize, &board);
+
+                if let Some(mov1) = self.get_best_move(&board) {
+                    best_move = Some(mov1);
+
+                    if let Some(mov2) = self.get_best_move(&board.do_move(mov1)) {
+                        ponder_move = Some(mov2);
+                    }
+                }
             }
 
             if score.abs() >= 102399 && self.get_best_move(&board).is_some() {
@@ -486,13 +498,15 @@ impl Searcher {
         }
 
         if self.id == 0 && output_best_move {
-            if let Some(mov1) = self.get_best_move(&board) {
-                print!("bestmove {} ", mov1);
+            if let Some(best) = best_move {
+                print!("bestmove {} ", best);
 
-                if let Some(mov2) = self.get_best_move(&board.do_move(mov1)) {
-                    print!("ponder {}", mov2);
+                if let Some(ponder) = ponder_move {
+                    print!("ponder {}", ponder);
                 }
                 println!();
+            } else {
+                println!("bestmove 0000");
             }
         }
 
