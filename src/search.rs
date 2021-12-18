@@ -311,7 +311,7 @@ impl Searcher {
             if generator.get_checks() == 0 {
                 return Ok(0);
             } else {
-                return Ok(-25600 * 4);
+                return Ok(-CHECKMATE * 4);
             }
         }
 
@@ -492,7 +492,7 @@ impl Searcher {
                 }
             }
 
-            if score.abs() >= 102399 && self.get_best_move(&board).is_some() {
+            if score.abs() >= CHECKMATE * 4 - 1 && self.get_best_move(&board).is_some() {
                 break;
             }
         }

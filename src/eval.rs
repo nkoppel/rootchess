@@ -34,6 +34,8 @@ pub fn b_pawn_threats(pawns: u64) -> u64 {
     (pawns & 0xfefefefefefefefe) >> 9
 }
 
+pub const CHECKMATE: i32 = 25600;
+
 const CHAIN_WEIGHT: i32 = 5;
 const PASSED_WEIGHT: i32 = 20;
 const DOUBLED_WEIGHT: i32 = -15;
@@ -53,7 +55,7 @@ const KNIGHT_WEIGHT: i32 = 320;
 const BISHOP_WEIGHT: i32 = 330;
 const ROOK_WEIGHT  : i32 = 500;
 const QUEEN_WEIGHT : i32 = 900;
-const KING_WEIGHT  : i32 = 25600;
+const KING_WEIGHT  : i32 = CHECKMATE;
 
 const PIECE_VALUE: [i32; 16] =
     [
@@ -62,7 +64,7 @@ const PIECE_VALUE: [i32; 16] =
         KNIGHT_WEIGHT,
         BISHOP_WEIGHT,
         QUEEN_WEIGHT,
-        25600,
+        KING_WEIGHT,
         ROOK_WEIGHT,
         ROOK_WEIGHT,
         0,
@@ -70,7 +72,7 @@ const PIECE_VALUE: [i32; 16] =
         -KNIGHT_WEIGHT,
         -BISHOP_WEIGHT,
         -QUEEN_WEIGHT,
-        -25600,
+        -KING_WEIGHT,
         -ROOK_WEIGHT,
         -ROOK_WEIGHT,
     ];
@@ -299,7 +301,7 @@ impl MoveGenerator {
                 if self.checks == 0 {
                     return 0;
                 } else {
-                    return mul * -25600;
+                    return mul * -CHECKMATE;
                 }
             }
 
