@@ -1,6 +1,7 @@
 #![feature(test)]
 #![feature(get_mut_unchecked)]
 #![allow(dead_code)]
+
 extern crate test;
 
 #[macro_use]
@@ -15,19 +16,29 @@ mod search;
 mod eval { pub use crate::gen_moves::eval::*; }
 mod uci { pub use crate::search::uci::*; }
 
-// use gen_tables::*;
+#[cfg(feature = "tuning")]
+mod tuning;
+
+use gen_tables::*;
 use board::*;
-// use gen_moves::*;
-// use moves::*;
-// use tt::*;
+use gen_moves::*;
+use moves::*;
+use tt::*;
 use search::*;
-// use eval::*;
+use eval::*;
 use uci::*;
 
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
+#[cfg(feature = "tuning")]
+fn main() {
+    // tuning::positions_from_games("tuning_games.pgn", "tuning_positions.txt")
+    println!("{:#?}", tuning::tune("tuning_positions.txt", &PARAMS));
+}
+
+#[cfg(not(feature = "tuning"))]
 fn main() {
     ucimanager(BufReader::new(io::stdin()));
     // let mut board = Board::from_fen("r1bqkbnr/pppp1ppp/8/8/3nP3/5N2/PPP2PPP/RNB1KB1R w KQkq - ");

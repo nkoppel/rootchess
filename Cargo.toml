@@ -4,9 +4,13 @@ version = "0.1.0"
 authors = ["Nathan Koppel <nathankoppel0@gmail.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+tuning = ["shakmaty", "pgn-reader"]
 
 [dependencies]
 rand = "0.8"
 packed_simd = { version = "0.3", package = "packed_simd_2", features = ["into_bits"] }
 lazy_static = "1.4"
+
+shakmaty = { version = "0.20", optional = true }
+pgn-reader = { version = "0.19", optional = true }

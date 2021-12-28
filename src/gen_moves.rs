@@ -895,6 +895,14 @@ fn b_gen_moves(b: &mut Bencher) {
 }
 
 #[bench]
+fn b_has_moves(b: &mut Bencher) {
+    let mut generator = MoveGenerator::new(Board::from_fen("8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/6P1/5P2 w - -"));
+    // let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
+
+    b.iter(|| generator.has_moves());
+}
+
+#[bench]
 fn b_gen_tactical(b: &mut Bencher) {
     let mut generator = MoveGenerator::new(Board::from_fen("8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/6P1/5P2 w - -"));
     // let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));

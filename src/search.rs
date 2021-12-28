@@ -248,12 +248,13 @@ impl Searcher {
                      depth: u8)
         -> Result<i32, bool>
     {
-        if depth == 0 {
-            return Ok(self.quiesce(board, alpha, beta));
-        }
         // Threefold repetition
         if let Some(2..) = self.prev_pos.get(&board.hash) {
             return Ok(0);
+        }
+        // drop through into quiescense search
+        if depth == 0 {
+            return Ok(self.quiesce(board, alpha, beta));
         }
 
         let orig_alpha = alpha;
@@ -365,8 +366,13 @@ impl Searcher {
             // Principal Variation Search
             if pvs {
                 self.incr_prev_pos(board.hash);
-                let s = -self.alphabeta(board2.clone(), -alpha - 4, -alpha, depth - reduction)?;
+                let s = self.alphabeta(board2.clone(), -alpha - 4, -alpha, depth - reduction);
                 self.decr_prev_pos(board.hash);
+
+                if s.is_err() {
+                    return s;
+                }
+                let s = -s.unwrap();
 
                 if s <= alpha {
                     continue;
@@ -375,8 +381,13 @@ impl Searcher {
 
             // Alpha-Beta
             self.incr_prev_pos(board.hash);
-            let score = -self.alphabeta(board2.clone(), -beta, -alpha, depth - reduction)?;
+            let score = self.alphabeta(board2.clone(), -beta, -alpha, depth - reduction);
             self.decr_prev_pos(board.hash);
+
+            if score.is_err() {
+                return score;
+            }
+            let score = -score.unwrap();
 
             if score >= cut {
                 std::mem::drop(iter);
@@ -389,8 +400,8 @@ impl Searcher {
 
                 // History Heuristic
                 if !board.is_capture(&board2) {
-                    self.history[board.black as usize][mov.start()][mov.end()] +=
-                        depth as usize * depth as usize;
+                    self.history[board.black as usize][mov.start()][mov.end()]
+                        += depth as usize * depth as usize;
                 }
 
                 return Ok(out);
