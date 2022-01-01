@@ -185,8 +185,11 @@ impl Searcher {
 
         generator.set_board(board.clone());
         generator.gen_tactical();
+        generator.moves.retain(|b| {
+            board.eval_see(b) >= 0
+        });
         generator.moves.sort_by_cached_key(|b| {
-            invert_if(!board.black, board.eval_mvv_lva(b))
+            -board.eval_see(b)
         });
         let mut iter = generator.moves.drain(..);
 
@@ -249,9 +252,12 @@ impl Searcher {
         -> Result<i32, bool>
     {
         // Threefold repetition
-        if let Some(2..) = self.prev_pos.get(&board.hash) {
-            return Ok(0);
+        if let Some(1..) = self.prev_pos.get(&board.hash) {
+            if depth != self.curr_depth {
+                return Ok(0);
+            }
         }
+
         // drop through into quiescense search
         if depth == 0 {
             return Ok(self.quiesce(board, alpha, beta));
