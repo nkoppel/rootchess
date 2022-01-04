@@ -407,7 +407,7 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
 
                 if movetime.as_nanos() == 0 {
                     let margin = Duration::from_millis(3);
-                    movetime = (time / movestogo).max(inc);
+                    movetime = time / movestogo + inc;
 
                     if time.saturating_sub(movetime) < margin {
                         movetime = time - margin
