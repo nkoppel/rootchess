@@ -93,6 +93,11 @@ impl Visitor for PgnVisitor {
 use std::fs::File;
 use std::io::Write;
 
+use crate::board::*;
+use crate::tt::*;
+use crate::gen_moves::*;
+use crate::search::*;
+
 pub fn positions_from_games(file1: &str, file2: &str) {
     let     read  = File::open  (file1).unwrap();
     let mut write = File::create(file2).unwrap();
@@ -108,7 +113,18 @@ pub fn positions_from_games(file1: &str, file2: &str) {
         .map(|p| p.unwrap())
         .flatten();
 
+    let mut pawn_tt = TT::with_len(1024);
+    let mut searcher = Searcher::new_single(0, false);
+    let mut generator = MoveGenerator::empty();
+
     for (outcome, board) in iter {
-        writeln!(&mut write, "{} {}", outcome, fen(&board)).unwrap();
+        let board2 = Board::from_fen(&fen(&board));
+
+        let eval = generator.eval(board2.clone(), &mut pawn_tt);
+        let quiesce = searcher.quiesce(board2, -2000000, 2000000) / 4;
+
+        if (eval - quiesce).abs() < 25 {
+            writeln!(&mut write, "{} {}", outcome, fen(&board)).unwrap();
+        }
     }
 }

@@ -5,7 +5,7 @@ authors = ["Nathan Koppel <nathankoppel0@gmail.com>"]
 edition = "2018"
 
 [features]
-tuning = ["shakmaty", "pgn-reader"]
+tuning = ["shakmaty", "pgn-reader", "bitvec", "serde", "rmp-serde"]
 
 [dependencies]
 rand = "0.8"
@@ -14,3 +14,6 @@ lazy_static = "1.4"
 
 shakmaty = { version = "0.20", optional = true }
 pgn-reader = { version = "0.19", optional = true }
+bitvec = { version = "0.22", optional = true, features=["serde"] }
+serde = { version = "1.0", optional = true }
+rmp-serde = { version = "0.15", optional = true }

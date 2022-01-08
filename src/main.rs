@@ -34,8 +34,8 @@ use std::path::Path;
 
 #[cfg(feature = "tuning")]
 fn main() {
-    // tuning::positions_from_games("tuning_games.pgn", "tuning_positions.txt")
-    println!("{:#?}", tuning::tune("tuning_positions.txt", &PARAMS));
+    // tuning::positions_from_games("tuning_games2.pgn", "tuning_positions2.txt");
+    println!("{:#?}", tuning::tune("tuning_positions2.txt", "tuning_positions2.cache", &PARAMS));
 }
 
 #[cfg(not(feature = "tuning"))]
