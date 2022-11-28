@@ -195,15 +195,11 @@ impl Board {
                 .trailing_zeros() as usize;
 
             if !c960 {
-                if end > start {
-                    end = 5;
-                } else {
-                    end = 1;
-                }
-            }
+                end = if end > start {5} else {1};
 
-            if self.black {
-                end += 56;
+                if self.black {
+                    end += 56;
+                }
             }
 
             Move::pack(start, end, 0)
