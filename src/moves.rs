@@ -191,23 +191,23 @@ impl Board {
             (board_diff, (s.b ^ o.b).or())
         };
 
-        let mut is_castle = false;
+        let mut castle = 64;
         {
             let king_start = (self.kings() & cur_occ).trailing_zeros() as usize;
 
             for rook in LocStack(self.castling_rooks() & cur_occ) {
-                if board_diff == TABLES.castles[self.black as usize][king_start % 8][rook % 8].2 {
-                    is_castle = true;
+                let expected_diff = TABLES.castles[self.black as usize][king_start % 8][rook % 8].2;
+
+                if board_diff & expected_diff.or() == expected_diff {
+                    castle = rook;
                     break;
                 }
             }
         }
 
-
-        if is_castle {
-            let start   = (self.kings() & cur_occ).trailing_zeros() as usize;
-            let mut end = (self.rooks() & cur_occ & diff)
-                .trailing_zeros() as usize;
+        if castle < 64 {
+            let start = (self.kings() & cur_occ).trailing_zeros() as usize;
+            let mut end = castle;
 
             if !c960 {
                 end = if end > start {5} else {1};
@@ -262,29 +262,53 @@ impl Board {
 #[allow(unused_imports)]
 use test::Bencher;
 
-fn get_test_cases() -> Vec<(Move, Board)> {
+fn get_test_cases() -> Vec<(bool, Board, Move, Board)> {
     vec![
-        ("d5c6", "7n/6P1/2P5/8/5N2/8/P7/R3K3 b Q -"),
-        ("g7h8r", "7R/8/8/2pP4/5N2/8/P7/R3K3 b Q -"),
-        ("e1e2", "7n/6P1/8/2pP4/5N2/8/P3K3/R7 b - -"),
-        ("a1a8", "R6n/6P1/8/2pP4/5N2/8/P7/4K3 b - -"),
-        ("e1c1", "7n/6P1/8/2pP4/5N2/8/P7/2KR4 b - -"),
-        ("a2a4", "7n/6P1/8/2pP4/P4N2/8/8/R3K3 b Q a3"),
+        (
+            false,
+            "7n/6P1/8/2pP4/5N2/8/P7/R3K3 w Q c6",
+            vec![
+                ("d5c6", "7n/6P1/2P5/8/5N2/8/P7/R3K3 b Q -"),
+                ("g7h8r", "7R/8/8/2pP4/5N2/8/P7/R3K3 b Q -"),
+                ("e1e2", "7n/6P1/8/2pP4/5N2/8/P3K3/R7 b - -"),
+                ("a1a8", "R6n/6P1/8/2pP4/5N2/8/P7/4K3 b - -"),
+                ("e1c1", "7n/6P1/8/2pP4/5N2/8/P7/2KR4 b - -"),
+                ("a2a4", "7n/6P1/8/2pP4/P4N2/8/8/R3K3 b Q a3"),
+            ]
+        ),
+        (
+            true,
+            "2kr4/pp5p/6p1/3pp3/P3n3/1PP3P1/1Q5P/R1K1B3 w A - 0 27",
+            vec![
+                ("c1a1", "2kr4/pp5p/6p1/3pp3/P3n3/1PP3P1/1Q5P/2KRB3 b - - 0 27")
+            ]
+        ),
+        (
+            true,
+            "1rnbbkrn/p1p2ppp/8/1p1B4/1P1P4/3N4/1R1P1PPP/4BKRN b Ggb - 0 10",
+            vec![
+                ("f8g8", "1rnbbrkn/p1p2ppp/8/1p1B4/1P1P4/3N4/1R1P1PPP/4BKRN w G - 1 11")
+            ]
+        )
     ]
         .into_iter()
-        .map(|(m, b)| (m.parse().unwrap(), Board::from_fen(b)))
+        .flat_map(|(c960, fen1, moves)| {
+            let board = Board::from_fen(fen1);
+
+            moves
+                .into_iter()
+                .map(move |(m, fen2)| (c960, board.clone(), m.parse().unwrap(), Board::from_fen(fen2)))
+        })
         .collect()
 }
 
 #[test]
 fn t_moves() {
-    let board = Board::from_fen("7n/6P1/8/2pP4/5N2/8/P7/R3K3 w Q c6");
-
-    for (mov, board2) in get_test_cases() {
+    for (_, board, mov, board2) in get_test_cases() {
         assert_eq!(board.do_move(mov), board2);
     }
 
-    for (mov, board2) in get_test_cases() {
-        assert_eq!(board.get_move(&board2, false), mov);
+    for (c960, board, mov, board2) in get_test_cases() {
+        assert_eq!(board.get_move(&board2, c960), mov);
     }
 }
