@@ -176,20 +176,35 @@ impl Board {
 
     pub fn get_move(&self, other: &Board, c960: bool) -> Move {
         let cur_occ = if self.black {self.black()} else {self.white()};
-        let diff = {
+        let (board_diff, diff) = {
             let mut s = self.clone();
             let mut o = other.clone();
 
             s.remove_takeable_empty();
             o.remove_takeable_empty();
 
+            let board_diff = s.b ^ o.b;
+
             s.b ^= u64x4::new(0,0,0, s.castling_rooks());
             o.b ^= u64x4::new(0,0,0, o.castling_rooks());
 
-            (s.b ^ o.b).or()
+            (board_diff, (s.b ^ o.b).or())
         };
 
-        if (cur_occ & diff).count_ones() > 1 {
+        let mut is_castle = false;
+        {
+            let king_start = (self.kings() & cur_occ).trailing_zeros() as usize;
+
+            for rook in LocStack(self.castling_rooks() & cur_occ) {
+                if board_diff == TABLES.castles[self.black as usize][king_start % 8][rook % 8].2 {
+                    is_castle = true;
+                    break;
+                }
+            }
+        }
+
+
+        if is_castle {
             let start   = (self.kings() & cur_occ).trailing_zeros() as usize;
             let mut end = (self.rooks() & cur_occ & diff)
                 .trailing_zeros() as usize;
