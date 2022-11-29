@@ -40,7 +40,7 @@ fn main() {
 
 #[cfg(not(feature = "tuning"))]
 fn main() {
-    // ucimanager(BufReader::new(io::stdin()));
+    ucimanager(BufReader::new(io::stdin()));
     // let mut board = Board::from_fen("r1bqkbnr/pppp1ppp/8/8/3nP3/5N2/PPP2PPP/RNB1KB1R w KQkq - ");
     // let mut board = Board::from_fen(START_FEN);
     // let mut searcher = Searcher::new_single(1 << 24, false);
@@ -64,11 +64,6 @@ fn main() {
     // let mut generator = MoveGenerator::empty();
 
     // println!("{}", generator.eval(board, &mut tt));
-
-    let pos1 = Board::from_fen("2kr4/pp5p/6p1/3pp3/P3n3/1PP3P1/1Q5P/R1K1B3 w Q - 0 27");
-    let pos2 = Board::from_fen("2kr4/pp5p/6p1/3pp3/P3n3/1PP3P1/1Q5P/2KRB3 b - - 0 27");
-
-    println!("{}", pos1.get_move(&pos2, true));
 }
 
 use std::env;
