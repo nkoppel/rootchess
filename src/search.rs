@@ -1,13 +1,13 @@
 use crate::board::*;
+use crate::eval::*;
 use crate::gen_moves::*;
 use crate::moves::*;
 use crate::tt::*;
-use crate::eval::*;
 
-use rand::{Rng, thread_rng};
-use std::time::{Duration, Instant};
-use std::sync::mpsc::{Receiver, channel};
+use rand::{thread_rng, Rng};
 use std::collections::HashMap;
+use std::sync::mpsc::{channel, Receiver};
+use std::time::{Duration, Instant};
 
 #[path = "uci.rs"]
 pub mod uci;
@@ -22,7 +22,7 @@ pub struct Searcher {
     curr_depth: u8,
     time: u8,
     stop_time: Instant,
-    prev_pos: HashMap<u64,u8>,
+    prev_pos: HashMap<u64, u8>,
     history: [[[usize; 64]; 64]; 2],
     tt: TT,
     pawn_tt: TT,
@@ -32,10 +32,7 @@ pub struct Searcher {
 }
 
 fn pack_search(score: i32, time: u8, depth: u8, mov: Move) -> u64 {
-    (score as u64) << 32 |
-    (time  as u64) << 24 |
-    (depth as u64) << 16 |
-     mov.0 as u64
+    (score as u64) << 32 | (time as u64) << 24 | (depth as u64) << 16 | mov.0 as u64
 }
 
 fn unpack_search(te: u64) -> (i32, u8, u8, Move) {
@@ -57,15 +54,29 @@ fn unpack_perft(te: u64) -> (u8, u64) {
     ((te >> 56) as u8, te & 0x00ffffffffffffff)
 }
 
-pub fn ibv_exact(n: i32) -> i32 {  (n + 1) & !3 }
-pub fn ibv_min  (n: i32) -> i32 { ((n + 1) & !3) + 1 }
-pub fn ibv_max  (n: i32) -> i32 { ((n + 1) & !3) - 1 }
+pub fn ibv_exact(n: i32) -> i32 {
+    (n + 1) & !3
+}
+pub fn ibv_min(n: i32) -> i32 {
+    ((n + 1) & !3) + 1
+}
+pub fn ibv_max(n: i32) -> i32 {
+    ((n + 1) & !3) - 1
+}
 
-pub fn ibv_is_exact(n: i32) -> bool {n & 3 == 0}
-pub fn ibv_is_lower(n: i32) -> bool {n & 3 == 1}
-pub fn ibv_is_upper(n: i32) -> bool {n & 3 == 3}
+pub fn ibv_is_exact(n: i32) -> bool {
+    n & 3 == 0
+}
+pub fn ibv_is_lower(n: i32) -> bool {
+    n & 3 == 1
+}
+pub fn ibv_is_upper(n: i32) -> bool {
+    n & 3 == 3
+}
 
-pub fn from_ibv(n: i32) -> i32 { ibv_exact(n) / 4 }
+pub fn from_ibv(n: i32) -> i32 {
+    ibv_exact(n) / 4
+}
 
 pub fn show_ibv(n: i32) -> String {
     let mut out = String::new();
@@ -80,13 +91,13 @@ pub fn show_ibv(n: i32) -> String {
 }
 
 impl Searcher {
-    pub fn new(tt: TT,
-               pawn_tt: TT,
-               recv: Receiver<SearcherCommand>,
-               stop: Receiver<bool>,
-               id: usize)
-        -> Self
-        {
+    pub fn new(
+        tt: TT,
+        pawn_tt: TT,
+        recv: Receiver<SearcherCommand>,
+        stop: Receiver<bool>,
+        id: usize,
+    ) -> Self {
         Self {
             gens: Vec::new(),
             c960: false,
@@ -101,7 +112,7 @@ impl Searcher {
             pawn_tt,
             recv,
             stop,
-            id
+            id,
         }
     }
 
@@ -185,12 +196,8 @@ impl Searcher {
 
         generator.set_board(board.clone());
         generator.gen_tactical();
-        generator.moves.retain(|b| {
-            board.eval_see(b) >= 0
-        });
-        generator.moves.sort_by_cached_key(|b| {
-            -board.eval_see(b)
-        });
+        generator.moves.retain(|b| board.eval_see(b) >= 0);
+        generator.moves.sort_by_cached_key(|b| -board.eval_see(b));
         let mut iter = generator.moves.drain(..);
 
         while let Some(board2) = iter.next() {
@@ -217,12 +224,15 @@ impl Searcher {
 
         if hash == hash2 {
             if depth >= depth2 {
-                self.tt.write(hash, pack_search(score, self.time, depth, mov));
+                self.tt
+                    .write(hash, pack_search(score, self.time, depth, mov));
             } else {
-                self.tt.write(hash, pack_search(score2, self.time, depth2, mov2));
+                self.tt
+                    .write(hash, pack_search(score2, self.time, depth2, mov2));
             }
         } else if depth >= depth2 || self.time != time2 {
-            self.tt.write(hash, pack_search(score, self.time, depth, mov));
+            self.tt
+                .write(hash, pack_search(score, self.time, depth, mov));
         }
     }
 
@@ -244,13 +254,13 @@ impl Searcher {
         }
     }
 
-    pub fn alphabeta(&mut self,
-                     board: Board,
-                     mut alpha: i32,
-                     beta: i32,
-                     depth: u8)
-        -> Result<i32, bool>
-    {
+    pub fn alphabeta(
+        &mut self,
+        board: Board,
+        mut alpha: i32,
+        beta: i32,
+        depth: u8,
+    ) -> Result<i32, bool> {
         // Threefold repetition
         if let Some(1..) = self.prev_pos.get(&board.hash) {
             if depth != self.curr_depth {
@@ -277,8 +287,8 @@ impl Searcher {
 
                 match score & 3 {
                     0 => return Ok(score),
-                    1 if score >= cut   => return Ok(score),
-                    3 if score <  alpha => return Ok(alpha),
+                    1 if score >= cut => return Ok(score),
+                    3 if score < alpha => return Ok(alpha),
                     _ => {}
                 }
             }
@@ -290,7 +300,7 @@ impl Searcher {
 
         // Check for stop conditions
         if let Ok(b) = self.stop.try_recv() {
-            return Err(b)
+            return Err(b);
         } else if Instant::now() > self.stop_time {
             return Err(true);
         }
@@ -305,7 +315,7 @@ impl Searcher {
             let score = -self.alphabeta(board2, -cut - 4, -cut, depth - 3)?;
 
             if score > cut {
-                return Ok(score)
+                return Ok(score);
             }
         }
 
@@ -406,8 +416,8 @@ impl Searcher {
 
                 // History Heuristic
                 if !board.is_capture(&board2) {
-                    self.history[board.black as usize][mov.start()][mov.end()]
-                        += depth as usize * depth as usize;
+                    self.history[board.black as usize][mov.start()][mov.end()] +=
+                        depth as usize * depth as usize;
                 }
 
                 return Ok(out);
@@ -425,12 +435,11 @@ impl Searcher {
         generator.moves = moves;
         self.gens.push(generator);
 
-        let mov =
-            if let Some(b) = best_move {
-                board.get_move(&b, self.c960)
-            } else {
-                Move(0)
-            };
+        let mov = if let Some(b) = best_move {
+            board.get_move(&b, self.c960)
+        } else {
+            Move(0)
+        };
 
         if alpha != orig_alpha {
             self.write_tt(board.hash, alpha, depth, mov);
@@ -446,7 +455,7 @@ impl Searcher {
             let (.., mov) = unpack_search(d);
 
             if mov.0 != 0 {
-                return Some(mov)
+                return Some(mov);
             }
         }
         None
@@ -474,9 +483,7 @@ impl Searcher {
         println!();
     }
 
-    pub fn search(&mut self, board: Board, min_depth: u8, max_depth: u8)
-        -> i32
-    {
+    pub fn search(&mut self, board: Board, min_depth: u8, max_depth: u8) -> i32 {
         let mut score = 0;
         let mut output_best_move = true;
         let mut best_move = None;
@@ -497,7 +504,12 @@ impl Searcher {
             }
 
             if self.id == 0 {
-                print!("info depth {} seldepth {} score {} pv ", depth, self.gens.len(), show_ibv(score));
+                print!(
+                    "info depth {} seldepth {} score {} pv ",
+                    depth,
+                    self.gens.len(),
+                    show_ibv(score)
+                );
                 self.show_pv(depth as usize, &board);
 
                 if let Some(mov1) = self.get_best_move(&board) {

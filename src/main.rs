@@ -8,25 +8,29 @@ extern crate test;
 #[macro_use]
 extern crate lazy_static;
 
-mod gen_tables;
 mod board;
 mod gen_moves;
+mod gen_tables;
 mod moves;
-mod tt;
 mod search;
-mod eval { pub use crate::gen_moves::eval::*; }
-mod uci { pub use crate::search::uci::*; }
+mod tt;
+mod eval {
+    pub use crate::gen_moves::eval::*;
+}
+mod uci {
+    pub use crate::search::uci::*;
+}
 
 #[cfg(feature = "tuning")]
 mod tuning;
 
-use gen_tables::*;
 use board::*;
-use gen_moves::*;
-use moves::*;
-use tt::*;
-use search::*;
 use eval::*;
+use gen_moves::*;
+use gen_tables::*;
+use moves::*;
+use search::*;
+use tt::*;
 use uci::*;
 
 use std::fs::File;
@@ -36,7 +40,10 @@ use std::path::Path;
 #[cfg(feature = "tuning")]
 fn main() {
     // tuning::positions_from_games("tuning_games2.pgn", "tuning_positions2.txt");
-    println!("{:#?}", tuning::tune("tuning_positions2.txt", "tuning_positions2.cache", &PARAMS));
+    println!(
+        "{:#?}",
+        tuning::tune("tuning_positions2.txt", "tuning_positions2.cache", &PARAMS)
+    );
 }
 
 #[cfg(not(feature = "tuning"))]
@@ -47,15 +54,15 @@ fn main() {
     // let mut searcher = Searcher::new_single(1 << 24, false);
 
     // loop {
-        // // let score = searcher.alphabeta(board.clone(), 316, 320, 3);
-        // let score = searcher.alphabeta(board.clone(), -200000, 200000, 8);
+    // // let score = searcher.alphabeta(board.clone(), 316, 320, 3);
+    // let score = searcher.alphabeta(board.clone(), -200000, 200000, 8);
 
-        // board = board.do_move(searcher.get_best_move(&board).unwrap());
-        // println!("{:?}", from_ibv(score.unwrap()));
-        // println!("{}", board.to_fen(false));
-        // println!("{:?}", board);
+    // board = board.do_move(searcher.get_best_move(&board).unwrap());
+    // println!("{:?}", from_ibv(score.unwrap()));
+    // println!("{}", board.to_fen(false));
+    // println!("{:?}", board);
 
-        // searcher.incr_time();
+    // searcher.incr_time();
     // }
 
     // perftree();
@@ -84,7 +91,9 @@ fn perftree() {
 }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where P: AsRef<Path>, {
+where
+    P: AsRef<Path>,
+{
     let file = File::open(filename)?;
     Ok(io::BufReader::new(file).lines())
 }

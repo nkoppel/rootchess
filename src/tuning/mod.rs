@@ -2,11 +2,11 @@ mod positions_from_games;
 
 pub use positions_from_games::positions_from_games;
 
-use crate::gen_moves::*;
-use crate::eval::*;
 use crate::board::*;
-use crate::tt::*;
+use crate::eval::*;
+use crate::gen_moves::*;
 use crate::search::*;
+use crate::tt::*;
 
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
@@ -18,7 +18,10 @@ fn read_positions(file: &str) -> Vec<(f64, Board)> {
         let line = line.unwrap();
         let ind = line.find(' ').unwrap();
 
-        out.push((line[..ind].parse::<f64>().unwrap(), Board::from_fen(&line[ind + 1..])));
+        out.push((
+            line[..ind].parse::<f64>().unwrap(),
+            Board::from_fen(&line[ind + 1..]),
+        ));
     }
 
     out
@@ -39,9 +42,9 @@ impl EvalParams {
 
             knight_move_weight: vec[6],
             bishop_move_weight: vec[7],
-            rook_move_weight  : vec[8],
-            queen_move_weight : vec[9],
-            king_move_weight  : vec[10],
+            rook_move_weight: vec[8],
+            queen_move_weight: vec[9],
+            king_move_weight: vec[10],
 
             pawn_weight: 100,
             knight_weight: 279,
@@ -60,7 +63,7 @@ impl EvalParams {
                 }
 
                 psts
-            }
+            },
         }
     }
 
@@ -89,56 +92,56 @@ impl EvalParams {
     }
 
     // fn from_vec(vec: &[i32]) -> Self {
-        // EvalParams {
-            // chain_weight: vec[0],
-            // passed_weight: vec[1],
-            // doubled_weight: vec[2],
-            // isolated_weight: vec[3],
-            // king_pawn_weight: vec[4],
+    // EvalParams {
+    // chain_weight: vec[0],
+    // passed_weight: vec[1],
+    // doubled_weight: vec[2],
+    // isolated_weight: vec[3],
+    // king_pawn_weight: vec[4],
 
-            // castle_bonus: vec[5],
+    // castle_bonus: vec[5],
 
-            // knight_move_weight: vec[6],
-            // bishop_move_weight: vec[7],
-            // rook_move_weight  : vec[8],
-            // queen_move_weight : vec[9],
-            // king_move_weight  : vec[10],
+    // knight_move_weight: vec[6],
+    // bishop_move_weight: vec[7],
+    // rook_move_weight  : vec[8],
+    // queen_move_weight : vec[9],
+    // king_move_weight  : vec[10],
 
-            // pawn_weight: vec[11],
-            // knight_weight: vec[12],
-            // bishop_weight: vec[13],
-            // rook_weight: vec[14],
-            // queen_weight: vec[15],
-            // king_weight: 25600,
+    // pawn_weight: vec[11],
+    // knight_weight: vec[12],
+    // bishop_weight: vec[13],
+    // rook_weight: vec[14],
+    // queen_weight: vec[15],
+    // king_weight: 25600,
 
-            // psts: [[0; 64]; 16]
-        // }
+    // psts: [[0; 64]; 16]
+    // }
     // }
 
     // fn to_vec(&self) -> Vec<i32> {
-        // let mut out = Vec::new();
+    // let mut out = Vec::new();
 
-        // out.push(self.chain_weight);
-        // out.push(self.passed_weight);
-        // out.push(self.doubled_weight);
-        // out.push(self.isolated_weight);
-        // out.push(self.king_pawn_weight);
+    // out.push(self.chain_weight);
+    // out.push(self.passed_weight);
+    // out.push(self.doubled_weight);
+    // out.push(self.isolated_weight);
+    // out.push(self.king_pawn_weight);
 
-        // out.push(self.castle_bonus);
+    // out.push(self.castle_bonus);
 
-        // out.push(self.knight_move_weight);
-        // out.push(self.bishop_move_weight);
-        // out.push(self.rook_move_weight);
-        // out.push(self.queen_move_weight);
-        // out.push(self.king_move_weight);
+    // out.push(self.knight_move_weight);
+    // out.push(self.bishop_move_weight);
+    // out.push(self.rook_move_weight);
+    // out.push(self.queen_move_weight);
+    // out.push(self.king_move_weight);
 
-        // out.push(self.pawn_weight);
-        // out.push(self.knight_weight);
-        // out.push(self.bishop_weight);
-        // out.push(self.rook_weight);
-        // out.push(self.queen_weight);
+    // out.push(self.pawn_weight);
+    // out.push(self.knight_weight);
+    // out.push(self.bishop_weight);
+    // out.push(self.rook_weight);
+    // out.push(self.queen_weight);
 
-        // out
+    // out
     // }
 }
 
@@ -159,7 +162,7 @@ impl PartialEq for ParamInfo {
     }
 }
 
-impl Eq for ParamInfo { }
+impl Eq for ParamInfo {}
 
 impl Ord for ParamInfo {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -180,7 +183,8 @@ impl PartialOrd for ParamInfo {
 }
 
 fn tune_abstract_backoff<F>(params: &mut Vec<i32>, mut error: F)
-    where F: FnMut(&[i32]) -> f64
+where
+    F: FnMut(&[i32]) -> f64,
 {
     println!("Begin tuning");
 
@@ -211,10 +215,16 @@ fn tune_abstract_backoff<F>(params: &mut Vec<i32>, mut error: F)
             if info.backoff > 0 && time_since_improved < 2 * params.len() {
                 time_since_improved += 1;
                 info.backoff -= 1;
-                println!("Backed off on parameter {} for {} more iterations", info.index, info.backoff);
+                println!(
+                    "Backed off on parameter {} for {} more iterations",
+                    info.index, info.backoff
+                );
             } else {
                 let param = params[info.index];
-                println!("Param {}, value {}, error = {}", info.index, param, best_error);
+                println!(
+                    "Param {}, value {}, error = {}",
+                    info.index, param, best_error
+                );
 
                 if time_since_improved >= 2 * params.len() {
                     info.increment /= info.increment.abs();
@@ -235,7 +245,10 @@ fn tune_abstract_backoff<F>(params: &mut Vec<i32>, mut error: F)
                     best_error = new_error;
                     time_since_improved = 0;
                     improved += 1;
-                    println!("Changed param {}: {} -> {}", info.index, param, params[info.index]);
+                    println!(
+                        "Changed param {}: {} -> {}",
+                        info.index, param, params[info.index]
+                    );
                 } else {
                     params[info.index] = param;
                     time_since_improved += 1;
@@ -245,7 +258,10 @@ fn tune_abstract_backoff<F>(params: &mut Vec<i32>, mut error: F)
                             info.prev_backoff += 2;
                             info.backoff = info.prev_backoff;
                             info.can_backoff = false;
-                            println!("Backing off on parameter {} for {} iterations", info.index, info.backoff);
+                            println!(
+                                "Backing off on parameter {} for {} iterations",
+                                info.index, info.backoff
+                            );
                         } else {
                             info.can_backoff = true;
                         }
@@ -268,7 +284,7 @@ fn tune_abstract_backoff<F>(params: &mut Vec<i32>, mut error: F)
     }
 }
 
-use bitvec::{vec::BitVec, bitvec};
+use bitvec::{bitvec, vec::BitVec};
 
 fn precompute(file: &str, positions: &[(f64, Board)], params: &EvalParams) -> Vec<BitVec> {
     println!("Begin precomputation");
@@ -356,7 +372,9 @@ impl ParamTuner {
         let mut total_error = 0.;
 
         for (i, (expected, board)) in self.positions.iter().enumerate() {
-            let eval = self.generator.eval_with_params(board.clone(), &mut self.pawn_tt, &params);
+            let eval = self
+                .generator
+                .eval_with_params(board.clone(), &mut self.pawn_tt, &params);
             let error = eval_error(*expected, eval);
 
             self.errors1[i] = error;
@@ -368,22 +386,25 @@ impl ParamTuner {
         self.best_error = total_error / self.positions.len() as f64;
     }
 
-    fn new(positions: Vec<(f64, Board)>, params: Vec<i32>, affected_positions: Vec<BitVec>) -> Self {
+    fn new(
+        positions: Vec<(f64, Board)>,
+        params: Vec<i32>,
+        affected_positions: Vec<BitVec>,
+    ) -> Self {
         let n_positions = positions.len();
 
-        let mut out =
-            Self {
-                positions,
-                params,
-                affected_positions,
+        let mut out = Self {
+            positions,
+            params,
+            affected_positions,
 
-                errors1: vec![0.; n_positions],
-                errors2: vec![0.; n_positions],
-                best_error: 0.,
+            errors1: vec![0.; n_positions],
+            errors2: vec![0.; n_positions],
+            best_error: 0.,
 
-                generator: MoveGenerator::empty(),
-                pawn_tt: TT::with_len(1024),
-            };
+            generator: MoveGenerator::empty(),
+            pawn_tt: TT::with_len(1024),
+        };
 
         out.init_errors();
 
@@ -403,7 +424,9 @@ impl ParamTuner {
 
             if *affects {
                 let board = self.positions[i].1.clone();
-                let eval = self.generator.eval_with_params(board, &mut self.pawn_tt, &params);
+                let eval = self
+                    .generator
+                    .eval_with_params(board, &mut self.pawn_tt, &params);
 
                 error = eval_error(self.positions[i].0, eval);
             } else {
@@ -447,7 +470,12 @@ impl ParamTuner {
                 println!("Sampling {}", param + increments[j]);
 
                 if self.try_step(j, increments[j]) {
-                    println!("Changed param {}: {} -> {}", j, param, param + increments[j]);
+                    println!(
+                        "Changed param {}: {} -> {}",
+                        j,
+                        param,
+                        param + increments[j]
+                    );
                     increments[j] *= 2;
                     improved += 1;
                 } else if increments[j].abs() == 1 {
@@ -497,23 +525,23 @@ pub fn tune(position_file: &str, cache_file: &str, params: &EvalParams) -> EvalP
     tuner.tune()
 
     // tune_abstract_backoff(&mut params, |p| {
-        // let params = EvalParams::from_vec(p);
+    // let params = EvalParams::from_vec(p);
 
-        // let mut error = 0.;
-        // pawn_tt.clear();
+    // let mut error = 0.;
+    // pawn_tt.clear();
 
-        // for (expected, board) in &positions {
-            // // println!("{}", board.to_fen(false));
+    // for (expected, board) in &positions {
+    // // println!("{}", board.to_fen(false));
 
-            // let score = generator.eval_with_params(board.clone(), &mut pawn_tt, &params);
-            // let win_prob = 1. / (1. + 10f64.powf(-0.6773868 * score as f64 / 400.));
+    // let score = generator.eval_with_params(board.clone(), &mut pawn_tt, &params);
+    // let win_prob = 1. / (1. + 10f64.powf(-0.6773868 * score as f64 / 400.));
 
-            // // println!("{} {} {}", score, win_prob, expected);
+    // // println!("{} {} {}", score, win_prob, expected);
 
-            // error += (expected - win_prob).powi(2);
-        // }
+    // error += (expected - win_prob).powi(2);
+    // }
 
-        // error / positions.len() as f64
+    // error / positions.len() as f64
     // });
 
     // EvalParams::from_vec(&params)

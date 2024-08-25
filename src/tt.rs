@@ -8,13 +8,13 @@ pub struct TT {
 impl TT {
     pub fn new() -> Self {
         Self {
-            table: Arc::new(Vec::new())
+            table: Arc::new(Vec::new()),
         }
     }
 
     pub fn with_len(len: usize) -> Self {
         Self {
-            table: Arc::new(vec![0; len * 2])
+            table: Arc::new(vec![0; len * 2]),
         }
     }
 
@@ -42,7 +42,7 @@ impl TT {
             return None;
         }
         let ind = hash as usize % self.len() * 2;
-        let h = self.table[ind    ];
+        let h = self.table[ind];
         let d = self.table[ind + 1];
 
         if hash == h ^ d {
@@ -54,7 +54,7 @@ impl TT {
 
     pub fn force_read(&self, hash: u64) -> (u64, u64) {
         let ind = hash as usize % self.len() * 2;
-        let h = self.table[ind    ];
+        let h = self.table[ind];
         let d = self.table[ind + 1];
 
         (h ^ d, d)
@@ -69,15 +69,13 @@ impl TT {
             }
 
             let ind = hash as usize % (t.len() / 2) * 2;
-            t[ind    ] = hash ^ data;
+            t[ind] = hash ^ data;
             t[ind + 1] = data;
         }
     }
 
     pub fn clear(&mut self) {
-        unsafe {
-            Arc::get_mut_unchecked(&mut self.table).fill(0)
-        }
+        unsafe { Arc::get_mut_unchecked(&mut self.table).fill(0) }
     }
 }
 
@@ -93,7 +91,9 @@ use std::thread;
 fn t_resize() {
     let mut tt = TT::new();
 
-    unsafe{tt.resize(20);}
+    unsafe {
+        tt.resize(20);
+    }
     assert_eq!(tt.len(), 20);
 
     assert!(tt.resize_safe(10));
@@ -101,7 +101,9 @@ fn t_resize() {
 
     let _tt2 = tt.clone();
 
-    unsafe{tt.resize(20);}
+    unsafe {
+        tt.resize(20);
+    }
     assert_eq!(tt.len(), 20);
 
     assert!(!tt.resize_safe(10));
@@ -116,7 +118,7 @@ fn t_write() {
     for i in 0..16 {
         let mut t = tt.clone();
 
-        handles.push(thread::spawn(move|| {
+        handles.push(thread::spawn(move || {
             t.write(0, i);
             t.write(i, i);
         }));

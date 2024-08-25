@@ -1,9 +1,12 @@
 // this is a submodule of search
 
+use std::sync::mpsc::{channel, Sender};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc, Mutex,
+};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-use std::sync::mpsc::{channel, Sender};
-use std::sync::{Arc, Mutex, atomic::{AtomicU64, Ordering}};
 
 use super::*;
 
@@ -14,7 +17,7 @@ pub enum SearcherCommand {
     SetC960(bool),
     Search(Duration, u8),
     SearchPerft(usize, Arc<Mutex<Vec<Move>>>, Arc<AtomicU64>),
-    Exit
+    Exit,
 }
 
 pub use SearcherCommand::*;
@@ -69,12 +72,12 @@ impl Searcher {
                     self.history = [[[0usize; 64]; 64]; 2];
 
                     self.search(board2.clone(), d.min(1), d);
-                },
+                }
                 SetBoard(b, m) => {
                     board = b;
                     moves = m;
                     self.incr_time();
-                },
+                }
                 SetC960(b) => self.c960 = b,
                 Exit => break,
                 _ => {}
@@ -94,15 +97,14 @@ struct ThreadPool {
 
 impl ThreadPool {
     fn new(tt: TT, pawn_tt: TT, len: usize) -> Self {
-        let mut out =
-            ThreadPool {
-                threads: Vec::new(),
-                sends: Vec::new(),
-                stops: Vec::new(),
-                tt, 
-                pawn_tt,
-                tasks: Vec::new(),
-            };
+        let mut out = ThreadPool {
+            threads: Vec::new(),
+            sends: Vec::new(),
+            stops: Vec::new(),
+            tt,
+            pawn_tt,
+            tasks: Vec::new(),
+        };
 
         out.add(len);
 
@@ -121,13 +123,11 @@ impl ThreadPool {
             let pawn_tt = self.pawn_tt.clone();
             let id = self.threads.len();
 
-            self.threads.push(
-                thread::spawn(move || {
-                    let mut searcher = Searcher::new(tt, pawn_tt, recv, r_st, id);
+            self.threads.push(thread::spawn(move || {
+                let mut searcher = Searcher::new(tt, pawn_tt, recv, r_st, id);
 
-                    searcher.listen();
-                })
-            );
+                searcher.listen();
+            }));
 
             self.tasks.push(0);
         }
@@ -191,21 +191,24 @@ impl ThreadPool {
     }
 }
 
-use std::io::{prelude::*, BufReader, BufRead};
+use std::io::{prelude::*, BufRead, BufReader};
 
-pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
+pub fn ucimanager<T>(read: BufReader<T>)
+where
+    T: Read,
+{
     let mut tt = TT::with_len(62500);
-    let     pawn_tt = TT::with_len(62500);
+    let pawn_tt = TT::with_len(62500);
 
     let mut generator = MoveGenerator::empty();
-    let     searcher  = Searcher::new(tt.clone(), pawn_tt.clone(), channel().1, channel().1, 0);
-    let mut threads   = ThreadPool::new(tt.clone(), pawn_tt.clone(), 1);
+    let searcher = Searcher::new(tt.clone(), pawn_tt.clone(), channel().1, channel().1, 0);
+    let mut threads = ThreadPool::new(tt.clone(), pawn_tt.clone(), 1);
 
     let mut lines = read.lines();
-    let mut line  = lines.next().unwrap().unwrap();
+    let mut line = lines.next().unwrap().unwrap();
     let mut words = line.split_whitespace();
 
-    let mut c960  = false;
+    let mut c960 = false;
     let mut board = Board::from_fen(START_FEN);
     let mut moves = Vec::new();
 
@@ -221,7 +224,7 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                 println!("option name Ponder type check default false");
                 println!("option name UCI_Chess960 type check default false");
                 println!("uciok");
-            },
+            }
             Some("position") => {
                 let pos = words.next().unwrap();
 
@@ -246,7 +249,7 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                 words = line.split_whitespace();
 
                 threads.send_all(SetBoard(board.clone(), moves.clone()));
-            },
+            }
             Some("getposition") => {
                 let board2 = moves.iter().fold(board.clone(), |b, m| b.do_move(*m));
 
@@ -261,11 +264,7 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                 threads.send_all(SetBoard(board.clone(), moves.clone()));
             }
             Some("dobestmove") => {
-                let reps = words
-                    .next()
-                    .unwrap_or("1")
-                    .parse::<usize>()
-                    .unwrap_or(1);
+                let reps = words.next().unwrap_or("1").parse::<usize>().unwrap_or(1);
 
                 let board2 = moves.iter().fold(board.clone(), |b, m| b.do_move(*m));
 
@@ -307,9 +306,7 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                 match name.trim() {
                     "Hash" => {
                         if let Ok(n) = value.trim().parse::<usize>() {
-                            unsafe {
-                                tt.resize(n * 62500)
-                            }
+                            unsafe { tt.resize(n * 62500) }
                         }
                     }
                     "Threads" => {
@@ -379,21 +376,24 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
                             }
                         }
                         "perft" => {
-                            let depth = 
-                                if let Some(w) = words.next() {
-                                    if let Ok(d) = w.parse::<usize>() {
-                                        d
-                                    } else {
-                                        continue;
-                                    }
+                            let depth = if let Some(w) = words.next() {
+                                if let Ok(d) = w.parse::<usize>() {
+                                    d
                                 } else {
                                     continue;
-                                };
+                                }
+                            } else {
+                                continue;
+                            };
 
                             generator.set_board(board.clone());
                             generator.gen_moves();
 
-                            let moves = generator.moves.drain(..).map(|b| board.get_move(&b, c960)).collect::<Vec<_>>();
+                            let moves = generator
+                                .moves
+                                .drain(..)
+                                .map(|b| board.get_move(&b, c960))
+                                .collect::<Vec<_>>();
                             let moves = Arc::new(Mutex::new(moves));
                             let total = Arc::new(AtomicU64::new(0));
 
@@ -440,7 +440,7 @@ pub fn ucimanager<T>(read: BufReader<T>) where T: Read {
             }
             Some("stop") => threads.stop_all(true),
             Some("quit") => break,
-            Some(_) => {},
+            Some(_) => {}
             None => {
                 if let Some(Ok(l)) = lines.next() {
                     line = l;
@@ -464,8 +464,11 @@ pub fn perftmanager(ttsize: usize, threads: usize, board: Board, depth: usize) {
     let mut generator = MoveGenerator::new(board.clone());
     generator.gen_moves();
 
-    let moves: Vec<_> =
-        generator.moves.iter().map(|b| board.get_move(&b, false)).collect();
+    let moves: Vec<_> = generator
+        .moves
+        .iter()
+        .map(|b| board.get_move(&b, false))
+        .collect();
 
     let moves = Arc::new(Mutex::new(moves));
     let total = Arc::new(AtomicU64::new(0));

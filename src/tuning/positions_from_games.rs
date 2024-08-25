@@ -1,14 +1,6 @@
-use shakmaty::{
-    Chess,
-    Position,
-    Setup,
-    san::SanPlus,
-    fen::fen,
-    Color,
-    Outcome,
-};
+use shakmaty::{fen::fen, san::SanPlus, Chess, Color, Outcome, Position, Setup};
 
-use pgn_reader::{Visitor, Skip, RawComment, RawHeader, BufferedReader};
+use pgn_reader::{BufferedReader, RawComment, RawHeader, Skip, Visitor};
 
 type Positions = Vec<(f32, Chess)>;
 
@@ -61,18 +53,17 @@ impl Visitor for PgnVisitor {
     }
 
     fn outcome(&mut self, outcome: Option<Outcome>) {
-        let outcome_num =
-            match outcome {
-                Some(Outcome::Decisive {winner: color}) => {
-                    if color == Color::White {
-                        1.
-                    } else {
-                        0.
-                    }
-                },
-                Some(Outcome::Draw) => 0.5,
-                None => panic!("Game did not include outcome!"),
-            };
+        let outcome_num = match outcome {
+            Some(Outcome::Decisive { winner: color }) => {
+                if color == Color::White {
+                    1.
+                } else {
+                    0.
+                }
+            }
+            Some(Outcome::Draw) => 0.5,
+            None => panic!("Game did not include outcome!"),
+        };
 
         for (num, board) in &mut self.positions {
             if board.turn() == Color::White {
@@ -83,7 +74,9 @@ impl Visitor for PgnVisitor {
         }
     }
 
-    fn begin_variation(&mut self) -> Skip { Skip(true) }
+    fn begin_variation(&mut self) -> Skip {
+        Skip(true)
+    }
 
     fn end_game(&mut self) -> Positions {
         std::mem::replace(&mut self.positions, Vec::new())
@@ -94,12 +87,12 @@ use std::fs::File;
 use std::io::Write;
 
 use crate::board::*;
-use crate::tt::*;
 use crate::gen_moves::*;
 use crate::search::*;
+use crate::tt::*;
 
 pub fn positions_from_games(file1: &str, file2: &str) {
-    let     read  = File::open  (file1).unwrap();
+    let read = File::open(file1).unwrap();
     let mut write = File::create(file2).unwrap();
 
     let mut visitor = PgnVisitor {

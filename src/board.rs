@@ -1,5 +1,5 @@
 use crate::gen_tables::*;
-pub use std::simd::{u64x4, num::SimdUint};
+pub use std::simd::{num::SimdUint, u64x4};
 
 macro_rules! gen_line {
     ( $val:ident, $op:tt, 0, 0, 0, 0 ) => {};
@@ -41,8 +41,7 @@ macro_rules! get_piece {
 
 pub const FEN_PIECES: &str = "_PNBQKRR_pnbqkrr";
 pub const FILES: &str = "hgfedcba";
-pub const START_FEN: &str =
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+pub const START_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 pub fn sq_from_str(s: &str) -> usize {
     let mut word = s.chars();
@@ -67,7 +66,7 @@ pub fn str_from_sq(sq: usize) -> String {
 pub struct Board {
     pub b: u64x4,
     pub black: bool,
-    pub hash: u64
+    pub hash: u64,
 }
 
 impl Board {
@@ -75,7 +74,7 @@ impl Board {
         Self {
             b: u64x4::splat(0),
             black: false,
-            hash: 0
+            hash: 0,
         }
     }
 
@@ -110,9 +109,7 @@ impl Board {
         out
     }
 
-    pub fn from_squarewise(squares: &[u8], black: bool)
-        -> Self
-    {
+    pub fn from_squarewise(squares: &[u8], black: bool) -> Self {
         let mut out = vec![0; 4];
 
         for i in 0..4 {
@@ -124,7 +121,7 @@ impl Board {
         let mut out = Board {
             b: u64x4::from_slice(&out[..]),
             black,
-            hash: 0
+            hash: 0,
         };
 
         out.init_hash();
@@ -221,7 +218,10 @@ impl Board {
 
         for c in words.next().unwrap().chars() {
             match c {
-                '/' => {y -= 1; x = 7}
+                '/' => {
+                    y -= 1;
+                    x = 7
+                }
                 _ if c.is_digit(8) => {
                     let d = c.to_digit(8).unwrap();
 
@@ -248,16 +248,15 @@ impl Board {
         }
 
         for c in words.next().unwrap().chars() {
-            let (sq_offset, piece) =
-                if c.is_ascii_lowercase() {
-                    (56, 0xF)
-                } else {
-                    (0, 7)
-                };
+            let (sq_offset, piece) = if c.is_ascii_lowercase() {
+                (56, 0xF)
+            } else {
+                (0, 7)
+            };
 
             match c.to_ascii_lowercase() {
-                'k' => {squares[sq_offset]     = piece}
-                'q' => {squares[sq_offset + 7] = piece}
+                'k' => squares[sq_offset] = piece,
+                'q' => squares[sq_offset + 7] = piece,
                 f => {
                     if let Some(f) = FILES.find(f) {
                         squares[sq_offset + f] = piece
@@ -275,29 +274,29 @@ impl Board {
         Board::from_squarewise(&squares, black)
     }
 
-    get_piece!(pawns  , [M, 0, 0, 0], [0, M, M, 0]);
+    get_piece!(pawns, [M, 0, 0, 0], [0, M, M, 0]);
     get_piece!(knights, [M, 0, 0, 0], [0, M, 0, M]);
     get_piece!(bishops, [M, 0, 0, 0], [0, M, 0, 0]);
-    get_piece!(queens , [M, 0, 0, 0], [0, 0, M, M]);
-    get_piece!(kings  , [M, 0, 0, 0], [0, 0, M, 0]);
+    get_piece!(queens, [M, 0, 0, 0], [0, 0, M, M]);
+    get_piece!(kings, [M, 0, 0, 0], [0, 0, M, 0]);
 
-    get_piece!(white_pawns  , [0, 0, 0, 0], [M, M, M, 0]);
+    get_piece!(white_pawns, [0, 0, 0, 0], [M, M, M, 0]);
     get_piece!(white_knights, [0, 0, 0, 0], [M, M, 0, M]);
     get_piece!(white_bishops, [0, 0, 0, 0], [M, M, 0, 0]);
-    get_piece!(white_queens , [0, 0, 0, 0], [M, 0, M, M]);
-    get_piece!(white_kings  , [0, 0, 0, 0], [M, 0, M, 0]);
+    get_piece!(white_queens, [0, 0, 0, 0], [M, 0, M, M]);
+    get_piece!(white_kings, [0, 0, 0, 0], [M, 0, M, 0]);
 
-    get_piece!(black_pawns  , [0, 0, 0, 0], [0, M, M, 0]);
+    get_piece!(black_pawns, [0, 0, 0, 0], [0, M, M, 0]);
     get_piece!(black_knights, [0, 0, 0, 0], [0, M, 0, M]);
     get_piece!(black_bishops, [0, 0, 0, 0], [0, M, 0, 0]);
-    get_piece!(black_queens , [0, 0, 0, 0], [0, 0, M, M]);
-    get_piece!(black_kings  , [0, 0, 0, 0], [0, 0, M, 0]);
+    get_piece!(black_queens, [0, 0, 0, 0], [0, 0, M, M]);
+    get_piece!(black_kings, [0, 0, 0, 0], [0, 0, M, 0]);
 
-    get_piece!(rooks      , [M, 0, 0, M], [0, 0, 0, 0]);
+    get_piece!(rooks, [M, 0, 0, M], [0, 0, 0, 0]);
     get_piece!(white_rooks, [0, 0, 0, M], [M, 0, 0, 0]);
     get_piece!(black_rooks, [0, 0, 0, M], [0, 0, 0, 0]);
 
-    get_piece!(castling_rooks      , [M, 0, 0, 0], [0, 0, 0, 0]);
+    get_piece!(castling_rooks, [M, 0, 0, 0], [0, 0, 0, 0]);
     get_piece!(castling_white_rooks, [0, 0, 0, 0], [M, 0, 0, 0]);
     get_piece!(castling_black_rooks, [0, 0, 0, 0], [0, 0, 0, 0]);
 
@@ -325,7 +324,7 @@ impl Board {
         let mut out = Board {
             b: u64x4::from_array([self.black_pawns(), 0, 0, self.pawns()]),
             black: self.black,
-            hash: 0
+            hash: 0,
         };
 
         out.init_hash();
@@ -346,7 +345,7 @@ lazy_static! {
     pub static ref HASHER: Hasher = Hasher::new();
 }
 
-use rand::{Rng, thread_rng};
+use rand::{thread_rng, Rng};
 
 impl Hasher {
     pub fn new() -> Self {
@@ -361,7 +360,7 @@ impl Hasher {
 
         Self {
             bits,
-            black: rng.gen()
+            black: rng.gen(),
         }
     }
 
@@ -437,7 +436,7 @@ use test::Bencher;
 #[test]
 fn t_hash() {
     let mut board1 = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -");
-    let     board2 = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq -");
+    let board2 = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq -");
     let mut board3 = Board::from_fen("rnbqkbnr/pppppppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKBNR b KQkq e3");
 
     let hash1 = board1.hash;
@@ -482,10 +481,8 @@ fn b_init_hash(b: &mut Bencher) {
 
 #[bench]
 fn b_update_hash(b: &mut Bencher) {
-    let     board1 = Board::from_fen(START_FEN);
-    let mut board2 = Board::from_fen(
-        "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
-    );
+    let board1 = Board::from_fen(START_FEN);
+    let mut board2 = Board::from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1");
 
     b.iter(|| {
         board2.update_hash(test::black_box(&board1));

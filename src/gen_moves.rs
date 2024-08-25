@@ -1,8 +1,8 @@
 #[path = "eval.rs"]
 pub mod eval;
 
-use crate::gen_tables::*;
 use crate::board::*;
+use crate::gen_tables::*;
 
 #[inline]
 fn gen_rook_moves(sq: usize, mut occ: u64) -> u64 {
@@ -36,7 +36,7 @@ impl Board {
         out |= TABLES.black_pawn_takes[sq] & self.white_pawns();
         out |= TABLES.knight[sq] & self.knights();
         out |= gen_bishop_moves(sq, occ) & (self.bishops() | self.queens());
-        out |= gen_rook_moves(sq, occ)   & (self.rooks()   | self.queens());
+        out |= gen_rook_moves(sq, occ) & (self.rooks() | self.queens());
 
         out & occ
     }
@@ -58,7 +58,7 @@ impl Board {
         out |= cur_pawn_takes[sq] & self.pawns();
         out |= TABLES.knight[sq] & self.knights();
         out |= gen_bishop_moves(sq, occ) & (self.bishops() | self.queens());
-        out |= gen_rook_moves(sq, occ)   & (self.rooks()   | self.queens());
+        out |= gen_rook_moves(sq, occ) & (self.rooks() | self.queens());
 
         out & opp_occ
     }
@@ -97,7 +97,7 @@ pub struct MoveGenerator {
     checks: u64,
     blocks: u64,
     threatened: u64,
-    pub moves: Vec<Board>
+    pub moves: Vec<Board>,
 }
 
 impl MoveGenerator {
@@ -112,7 +112,7 @@ impl MoveGenerator {
             checks: 0,
             blocks: 0,
             threatened: 0,
-            moves: Vec::new()
+            moves: Vec::new(),
         }
     }
 
@@ -148,7 +148,7 @@ impl MoveGenerator {
         out |= self.cur_pawn_takes[sq] & board.pawns();
         out |= TABLES.knight[sq] & board.knights();
         out |= gen_bishop_moves(sq, occ) & (board.bishops() | board.queens());
-        out |= gen_rook_moves(sq, occ)   & (board.rooks()   | board.queens());
+        out |= gen_rook_moves(sq, occ) & (board.rooks() | board.queens());
 
         out & self.opp_occ
     }
@@ -157,7 +157,9 @@ impl MoveGenerator {
         self.get_threats_board(&self.board, sq)
     }
 
-    pub fn get_checks(&self) -> u64 { self.checks }
+    pub fn get_checks(&self) -> u64 {
+        self.checks
+    }
 
     fn set_threatened(&mut self) {
         let mut out = 0;
@@ -205,8 +207,7 @@ impl MoveGenerator {
         let bishop = gen_bishop_moves(kingloc, self.opp_occ);
         let rook = gen_rook_moves(kingloc, self.opp_occ);
 
-        for pin in LocStack(bishop & self.opp_occ & (self.board.bishops() | self.board.queens()))
-        {
+        for pin in LocStack(bishop & self.opp_occ & (self.board.bishops() | self.board.queens())) {
             let moves =
                 bishop & gen_bishop_moves(pin, self.opp_occ | self.board.kings()) | (1 << pin);
 
@@ -217,10 +218,8 @@ impl MoveGenerator {
             }
         }
 
-        for pin in LocStack(rook & self.opp_occ & (self.board.rooks() | self.board.queens()))
-        {
-            let moves =
-                rook & gen_rook_moves(pin, self.opp_occ | self.board.kings()) | (1 << pin);
+        for pin in LocStack(rook & self.opp_occ & (self.board.rooks() | self.board.queens())) {
+            let moves = rook & gen_rook_moves(pin, self.opp_occ | self.board.kings()) | (1 << pin);
 
             let piece = moves & self.cur_occ;
 
@@ -242,9 +241,15 @@ impl MoveGenerator {
         self.checks = self.get_threats(kingloc);
 
         match self.checks.count_ones() {
-            0 => {self.blocks = u64::MAX; return},
-            1 => {},
-            _ => {self.blocks = 0; return},
+            0 => {
+                self.blocks = u64::MAX;
+                return;
+            }
+            1 => {}
+            _ => {
+                self.blocks = 0;
+                return;
+            }
         }
 
         let check_loc = self.checks.trailing_zeros() as usize;
@@ -252,16 +257,14 @@ impl MoveGenerator {
         let rook = gen_rook_moves(kingloc, occ);
 
         if rook & self.checks != 0 {
-            self.blocks =
-                gen_rook_moves(check_loc, occ) & rook | self.checks;
+            self.blocks = gen_rook_moves(check_loc, occ) & rook | self.checks;
             return;
         }
 
         let bishop = gen_bishop_moves(kingloc, occ);
 
         if bishop & self.checks != 0 {
-            self.blocks =
-                gen_bishop_moves(check_loc, occ) & bishop | self.checks;
+            self.blocks = gen_bishop_moves(check_loc, occ) & bishop | self.checks;
             return;
         }
 
@@ -287,15 +290,13 @@ impl MoveGenerator {
     pub fn has_moves(&mut self) -> bool {
         let occ = self.board.occ();
 
-        let pawn_shift =
-            if self.board.black {
-                Box::new(|x| x >> 8) as Box<dyn Fn(u64) -> u64>
-            } else {
-                Box::new(|x| x << 8) as Box<dyn Fn(u64) -> u64>
-            };
+        let pawn_shift = if self.board.black {
+            Box::new(|x| x >> 8) as Box<dyn Fn(u64) -> u64>
+        } else {
+            Box::new(|x| x << 8) as Box<dyn Fn(u64) -> u64>
+        };
 
-        let kingloc =
-            (self.board.kings() & self.cur_occ).trailing_zeros() as usize;
+        let kingloc = (self.board.kings() & self.cur_occ).trailing_zeros() as usize;
 
         if kingloc == 64 {
             return false;
@@ -387,9 +388,8 @@ impl MoveGenerator {
         for te in LocStack(self.board.takeable_empties()) {
             for sq in LocStack(self.opp_pawn_takes[te] & self.board.pawns() & self.cur_occ) {
                 let mut board = self.board.clone();
-                board.b ^= TABLES.en_pass
-                    [self.board.black as usize]
-                    [(te % 8 > sq % 8) as usize] << (sq as u64 % 8);
+                board.b ^= TABLES.en_pass[self.board.black as usize][(te % 8 > sq % 8) as usize]
+                    << (sq as u64 % 8);
 
                 if self.get_threats_board(&board, kingloc) == 0 {
                     return true;
@@ -404,18 +404,20 @@ impl MoveGenerator {
         self.moves.clear();
 
         let occ = self.board.occ();
-        let (pawn_shift, pawn_mask1) =
-            if self.board.black {
-                (Box::new(|x| x >> 8) as Box<dyn Fn(u64) -> u64>,
-                    0xffff000000000000)
-            } else {
-                (Box::new(|x| x << 8) as Box<dyn Fn(u64) -> u64>,
-                    0x000000000000ffff)
-            };
+        let (pawn_shift, pawn_mask1) = if self.board.black {
+            (
+                Box::new(|x| x >> 8) as Box<dyn Fn(u64) -> u64>,
+                0xffff000000000000,
+            )
+        } else {
+            (
+                Box::new(|x| x << 8) as Box<dyn Fn(u64) -> u64>,
+                0x000000000000ffff,
+            )
+        };
 
         let pawn_mask2 = 0x0000ffffffff0000;
-        let kingloc =
-            (self.board.kings() & self.cur_occ).trailing_zeros() as usize;
+        let kingloc = (self.board.kings() & self.cur_occ).trailing_zeros() as usize;
 
         if kingloc == 64 {
             panic!()
@@ -429,7 +431,7 @@ impl MoveGenerator {
         // ========== King Moves ==========
         let moves = TABLES.king[kingloc] & !self.cur_occ & !self.threatened;
         let mut board2 = board.clone();
-        board2.b ^= u64x4::from_array([0,0,0,board.castling_rooks() & self.cur_occ]);
+        board2.b ^= u64x4::from_array([0, 0, 0, board.castling_rooks() & self.cur_occ]);
         board2.update_hash(&board);
 
         do_moves(&mut self.moves, &board2, kingloc, moves);
@@ -446,7 +448,7 @@ impl MoveGenerator {
             if occ & empty == 0 && self.threatened & threat == 0 {
                 let mut board2 = board.clone();
                 board2.b ^= diff;
-                board2.b ^= u64x4::from_array([0,0,0,board2.castling_rooks() & self.cur_occ]);
+                board2.b ^= u64x4::from_array([0, 0, 0, board2.castling_rooks() & self.cur_occ]);
                 board2.update_hash(&board);
 
                 self.moves.push(board2);
@@ -474,10 +476,9 @@ impl MoveGenerator {
 
             for sq2 in LocStack(ep_moves) {
                 let mut board2 = board.clone();
-                board2.b |= u64x4::from_array([pawn_shift(1 << sq),0,0,0]);
+                board2.b |= u64x4::from_array([pawn_shift(1 << sq), 0, 0, 0]);
                 board2.b &= u64x4::splat(!(1 << sq));
-                board2.b |= u64x4::from_array([self.board.black as u64,0,0,1])
-                    << (sq2 as u64);
+                board2.b |= u64x4::from_array([self.board.black as u64, 0, 0, 1]) << (sq2 as u64);
                 board2.update_hash(&board);
 
                 self.moves.push(board2);
@@ -534,9 +535,8 @@ impl MoveGenerator {
         for te in LocStack(self.board.takeable_empties()) {
             for sq in LocStack(self.opp_pawn_takes[te] & self.board.pawns() & self.cur_occ) {
                 let mut board2 = board.clone();
-                board2.b ^= TABLES.en_pass
-                    [self.board.black as usize]
-                    [(te % 8 > sq % 8) as usize] << (sq as u64 % 8);
+                board2.b ^= TABLES.en_pass[self.board.black as usize][(te % 8 > sq % 8) as usize]
+                    << (sq as u64 % 8);
                 board2.update_hash(&board);
                 board2.black ^= true;
 
@@ -575,7 +575,7 @@ impl MoveGenerator {
             moves &= self.pins[sq];
 
             let mut board2 = board.clone();
-            board2.b &= u64x4::from_array([M,M,M,!(1 << sq)]);
+            board2.b &= u64x4::from_array([M, M, M, !(1 << sq)]);
             board2.update_hash(&board);
 
             do_moves(&mut self.moves, &board2, sq, moves);
@@ -600,17 +600,19 @@ impl MoveGenerator {
         self.moves.clear();
 
         let occ = self.board.occ();
-        let (pawn_shift, promote_mask) =
-            if self.board.black {
-                (Box::new(|x| x >> 8) as Box<dyn Fn(u64) -> u64>,
-                    0x000000000000ffff)
-            } else {
-                (Box::new(|x| x << 8) as Box<dyn Fn(u64) -> u64>,
-                    0xffff000000000000)
-            };
+        let (pawn_shift, promote_mask) = if self.board.black {
+            (
+                Box::new(|x| x >> 8) as Box<dyn Fn(u64) -> u64>,
+                0x000000000000ffff,
+            )
+        } else {
+            (
+                Box::new(|x| x << 8) as Box<dyn Fn(u64) -> u64>,
+                0xffff000000000000,
+            )
+        };
 
-        let kingloc =
-            (self.board.kings() & self.cur_occ).trailing_zeros() as usize;
+        let kingloc = (self.board.kings() & self.cur_occ).trailing_zeros() as usize;
 
         if kingloc == 64 {
             return;
@@ -624,7 +626,7 @@ impl MoveGenerator {
         // ========== King Takes ==========
         let moves = TABLES.king[kingloc] & self.opp_occ & !self.threatened;
         let mut board2 = board.clone();
-        board2.b ^= u64x4::from_array([0,0,0,board.castling_rooks() & self.cur_occ]);
+        board2.b ^= u64x4::from_array([0, 0, 0, board.castling_rooks() & self.cur_occ]);
         board2.update_hash(&board);
 
         do_moves(&mut self.moves, &board2, kingloc, moves);
@@ -682,9 +684,8 @@ impl MoveGenerator {
         for te in LocStack(self.board.takeable_empties()) {
             for sq in LocStack(self.opp_pawn_takes[te] & self.board.pawns() & self.cur_occ) {
                 let mut board2 = board.clone();
-                board2.b ^= TABLES.en_pass
-                    [self.board.black as usize]
-                    [(te % 8 > sq % 8) as usize] << (sq as u64 % 8);
+                board2.b ^= TABLES.en_pass[self.board.black as usize][(te % 8 > sq % 8) as usize]
+                    << (sq as u64 % 8);
                 board2.update_hash(&board);
                 board2.black ^= true;
 
@@ -723,7 +724,7 @@ impl MoveGenerator {
             moves &= self.pins[sq];
 
             let mut board2 = board.clone();
-            board2.b &= u64x4::from_array([M,M,M,!(1 << sq)]);
+            board2.b &= u64x4::from_array([M, M, M, !(1 << sq)]);
             board2.update_hash(&board);
 
             do_moves(&mut self.moves, &board2, sq, moves);
@@ -766,22 +767,22 @@ fn t_get_threatened() {
 fn t_get_blocks() {
     let mut generator = MoveGenerator::empty();
 
-    generator.set_board(Board::from_fen("8/8/8/8/8/2b5/8/K7 w - -")); 
+    generator.set_board(Board::from_fen("8/8/8/8/8/2b5/8/K7 w - -"));
     assert_eq!(generator.blocks, 0x204000);
 
-    generator.set_board(Board::from_fen("8/8/r7/8/8/8/8/K7 w - -")); 
+    generator.set_board(Board::from_fen("8/8/r7/8/8/8/8/K7 w - -"));
     assert_eq!(generator.blocks, 0x0000808080808000);
 
-    generator.set_board(Board::from_fen("8/8/r7/8/8/2b5/8/K7 w - -")); 
+    generator.set_board(Board::from_fen("8/8/r7/8/8/2b5/8/K7 w - -"));
     assert_eq!(generator.blocks, 0);
 
-    generator.set_board(Board::from_fen("8/8/8/8/8/1n6/8/K7 w - -")); 
+    generator.set_board(Board::from_fen("8/8/8/8/8/1n6/8/K7 w - -"));
     assert_eq!(generator.blocks, 0x400000);
 
-    generator.set_board(Board::from_fen("8/8/8/8/8/8/1p6/K7 w - -")); 
+    generator.set_board(Board::from_fen("8/8/8/8/8/8/1p6/K7 w - -"));
     assert_eq!(generator.blocks, 0x4000);
 
-    generator.set_board(Board::from_fen("8/8/8/8/8/2n5/8/K7 w - -")); 
+    generator.set_board(Board::from_fen("8/8/8/8/8/2n5/8/K7 w - -"));
     assert_eq!(generator.blocks, u64::MAX);
 }
 
@@ -835,7 +836,14 @@ fn t_gen_moves() {
 
     let mut moves2 = Vec::new();
 
-    let expected = vec![(19, 0x1402002214), (29, 0x2048850df70a824), (33, 0x30505000000), (37, 0x88500050800000), (42, 0xc000000000000), (52, 0x10e8101010101010)];
+    let expected = vec![
+        (19, 0x1402002214),
+        (29, 0x2048850df70a824),
+        (33, 0x30505000000),
+        (37, 0x88500050800000),
+        (42, 0xc000000000000),
+        (52, 0x10e8101010101010),
+    ];
 
     let mut board2 = board.clone();
     board2.black ^= true;
@@ -888,7 +896,9 @@ fn t_gen_moves() {
 
 #[bench]
 fn b_gen_moves(b: &mut Bencher) {
-    let mut generator = MoveGenerator::new(Board::from_fen("8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/6P1/5P2 w - -"));
+    let mut generator = MoveGenerator::new(Board::from_fen(
+        "8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/6P1/5P2 w - -",
+    ));
     // let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
 
     b.iter(|| generator.gen_moves());
@@ -896,7 +906,9 @@ fn b_gen_moves(b: &mut Bencher) {
 
 #[bench]
 fn b_has_moves(b: &mut Bencher) {
-    let mut generator = MoveGenerator::new(Board::from_fen("8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/6P1/5P2 w - -"));
+    let mut generator = MoveGenerator::new(Board::from_fen(
+        "8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/6P1/5P2 w - -",
+    ));
     // let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
 
     b.iter(|| generator.has_moves());
@@ -904,7 +916,9 @@ fn b_has_moves(b: &mut Bencher) {
 
 #[bench]
 fn b_gen_tactical(b: &mut Bencher) {
-    let mut generator = MoveGenerator::new(Board::from_fen("8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/6P1/5P2 w - -"));
+    let mut generator = MoveGenerator::new(Board::from_fen(
+        "8/3Rp1P1/5P2/2B2pK1/2Q5/4N2p/6P1/5P2 w - -",
+    ));
     // let mut generator = MoveGenerator::new(Board::from_fen(START_FEN));
 
     b.iter(|| generator.gen_tactical());
