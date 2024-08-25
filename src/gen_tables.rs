@@ -204,13 +204,13 @@ fn ray_att(sq: usize, delta: (isize, isize), board: u64, out: &mut u64) {
     let (dx, dy) = delta;
     x += dx;
     y += dy;
-    while x >= 0 && x < 8 && y >= 0 && y < 8 && board & (1 << (x + y * 8)) == 0 {
+    while (0..8).contains(&x) && (0..8).contains(&y) && board & (1 << (x + y * 8)) == 0 {
         *out |= 1 << (x + y * 8);
         x += dx;
         y += dy;
     }
 
-    if x >= 0 && x < 8 && y >= 0 && y < 8 {
+    if (0..8).contains(&x) && (0..8).contains(&y) {
         *out |= 1 << (x + y * 8);
     }
 }
@@ -237,7 +237,7 @@ fn ray_mask(sq: usize, delta: (isize, isize), board: &mut u64) {
     x += dx;
     y += dy;
 
-    if x < 0 || x >= 8 || y < 0 || y >= 8 {
+    if !(0..8).contains(&x) || !(0..8).contains(&y) {
         return;
     }
 
@@ -279,13 +279,7 @@ fn deltas(bishop: bool) -> Vec<(isize, isize)> {
 fn gen_masks(bishop: bool) -> Vec<u64> {
     let deltas = deltas(bishop);
 
-    let mut out = vec![0; 64];
-
-    for sq in 0..64 {
-        out[sq] = gen_mask(sq, &deltas);
-    }
-
-    out
+    (0..64).map(|sq| gen_mask(sq, &deltas)).collect()
 }
 
 fn gen_occ_att(sq: usize, bishop: bool) -> Vec<(u64, u64)> {
@@ -348,6 +342,7 @@ fn gen_ep_table() -> Vec<Vec<u64x4>> {
     ]
 }
 
+#[allow(clippy::comparison_chain)]
 fn gen_castle_table() -> Vec<Vec<Vec<(u64, u64, u64x4)>>> {
     let king = piece_to_sq(13);
     let rook = piece_to_sq(14);
@@ -363,7 +358,7 @@ fn gen_castle_table() -> Vec<Vec<Vec<(u64, u64, u64x4)>>> {
             let (mut threat, mut empty, mut diff) = (0, 0, u64x4::splat(0));
 
             if ksq > rsq {
-                threat = ((1 << abs_diff(ksq, 1) + 1) - 1) << ksq.min(1);
+                threat = ((1 << (abs_diff(ksq, 1) + 1)) - 1) << ksq.min(1);
 
                 empty = ((1 << abs_diff(ksq, 1)) - 1) << (ksq + 1).min(1);
                 empty |= ((1 << abs_diff(rsq, 2)) - 1) << (rsq + 1).min(2);
@@ -375,7 +370,7 @@ fn gen_castle_table() -> Vec<Vec<Vec<(u64, u64, u64x4)>>> {
                 diff ^= king << 1;
                 diff ^= rook << 2;
             } else if ksq < rsq {
-                threat = ((1 << abs_diff(ksq, 5) + 1) - 1) << ksq.min(5);
+                threat = ((1 << (abs_diff(ksq, 5) + 1)) - 1) << ksq.min(5);
 
                 empty = ((1 << abs_diff(ksq, 5)) - 1) << (ksq + 1).min(5);
                 empty |= ((1 << abs_diff(rsq, 4)) - 1) << (rsq + 1).min(4);
@@ -462,7 +457,7 @@ fn gen_move_table(deltas: &[(isize, isize)]) -> Vec<u64> {
             let tx = x + dx;
             let ty = y + dy;
 
-            if tx >= 0 && tx < 8 && ty >= 0 && ty < 8 {
+            if (0..8).contains(&tx) && (0..8).contains(&ty) {
                 board |= 1 << (tx + ty * 8);
             }
         }
@@ -487,28 +482,24 @@ pub struct Tables {
 impl Tables {
     pub fn new() -> Self {
         Self {
-            white_pawn_takes: gen_move_table(&vec![(-1, 1), (1, 1)]),
-            black_pawn_takes: gen_move_table(&vec![(-1, -1), (1, -1)]),
-            knight: gen_move_table(&vec![
-                (1, 2),
+            white_pawn_takes: gen_move_table(&[(-1, 1), (1, 1)]),
+            black_pawn_takes: gen_move_table(&[(-1, -1), (1, -1)]),
+            knight: gen_move_table(&[(1, 2),
                 (-1, 2),
                 (1, -2),
                 (-1, -2),
                 (2, 1),
                 (-2, 1),
                 (2, -1),
-                (-2, -1),
-            ]),
-            king: gen_move_table(&vec![
-                (-1, -1),
+                (-2, -1)]),
+            king: gen_move_table(&[(-1, -1),
                 (0, -1),
                 (1, -1),
                 (-1, 0),
                 (1, 0),
                 (-1, 1),
                 (0, 1),
-                (1, 1),
-            ]),
+                (1, 1)]),
             bishop: gen_sliding_table(true),
             rook: gen_sliding_table(false),
             magic: gen_magic_table(),

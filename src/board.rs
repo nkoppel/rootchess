@@ -100,21 +100,15 @@ impl Board {
     }
 
     pub fn to_squarewise(&self) -> Vec<u8> {
-        let mut out = vec![0; 64];
-
-        for i in 0..64 {
-            out[i] = self.get_square(i as u8);
-        }
-
-        out
+        (0..64).map(|i| self.get_square(i as u8)).collect()
     }
 
     pub fn from_squarewise(squares: &[u8], black: bool) -> Self {
-        let mut out = vec![0; 4];
+        let mut out = [0; 4];
 
         for i in 0..4 {
-            for j in 0..64 {
-                out[3 - i] |= ((squares[j] >> i & 1) as u64) << j;
+            for (j, sq) in squares.iter().enumerate() {
+                out[3 - i] |= ((*sq >> i & 1) as u64) << j;
             }
         }
 
@@ -233,9 +227,7 @@ impl Board {
                     if let Some(i) = FEN_PIECES.find(c) {
                         squares[(x + y * 8) as usize] = i as u8;
 
-                        if x > 0 {
-                            x -= 1;
-                        }
+                        x = x.saturating_sub(1);
                     }
                 }
             }
@@ -243,7 +235,7 @@ impl Board {
 
         let mut black = false;
 
-        if words.next().unwrap().chars().next().unwrap() == 'b' {
+        if words.next().unwrap().starts_with('b') {
             black = true;
         }
 
@@ -268,7 +260,7 @@ impl Board {
         let word = words.next().unwrap();
 
         if word != "-" {
-            squares[sq_from_str(&word)] = 8;
+            squares[sq_from_str(word)] = 8;
         }
 
         Board::from_squarewise(&squares, black)
@@ -352,9 +344,9 @@ impl Hasher {
         let mut rng = thread_rng();
         let mut bits = [[0u64; 64]; 4];
 
-        for i in 0..4 {
-            for j in 0..64 {
-                bits[i][j] = rng.gen();
+        for row in &mut bits {
+            for x in row {
+                *x = rng.gen();
             }
         }
 
@@ -465,8 +457,8 @@ fn t_late_endgame() {
     let board1 = Board::from_fen(START_FEN);
     let board2 = Board::from_fen("8/8/3p4/2kPK3/8/8/8/8 w - -");
 
-    assert_eq!(board1.is_late_endgame(), false);
-    assert_eq!(board2.is_late_endgame(), true);
+    assert!(!board1.is_late_endgame());
+    assert!(board2.is_late_endgame());
 }
 
 #[bench]

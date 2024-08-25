@@ -382,7 +382,7 @@ impl Board {
             d -= 1;
         }
 
-        return gain[0];
+        gain[0]
     }
 
     fn eval_pawns(&self, p_hash: &mut TT, params: &EvalParams) -> i32 {
@@ -468,7 +468,7 @@ impl MoveGenerator {
         let pawns = board.all_pawns();
         let mut out = pawns.eval_pawns(p_hash, params);
 
-        for (black, mul) in vec![(true, -1), (false, 1)] {
+        for (black, mul) in [(true, -1), (false, 1)] {
             self.set_board(Board { black, ..board });
 
             out += self.eval_king(params);

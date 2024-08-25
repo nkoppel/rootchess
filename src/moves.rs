@@ -95,7 +95,7 @@ impl Board {
             out.b ^= TABLES.en_pass[self.black as usize][(end % 8 > start % 8) as usize]
                 << (start as u64 % 8);
 
-            out.update_hash(&self);
+            out.update_hash(self);
 
             out
         }
@@ -109,7 +109,7 @@ impl Board {
             out.b ^= u64x4::from_array([0, 0, 0, out.castling_rooks() & cur_occ]);
 
             out.remove_takeable_empty();
-            out.update_hash(&self);
+            out.update_hash(self);
 
             out
         }
@@ -121,7 +121,7 @@ impl Board {
             out.b ^= u64x4::from_array([0, 0, 0, out.castling_rooks() & cur_occ]);
 
             out.remove_takeable_empty();
-            out.update_hash(&self);
+            out.update_hash(self);
 
             out
         }
@@ -135,7 +135,7 @@ impl Board {
             out.b |= piece << end as u64;
             out.b |= u64x4::from_array([1 << ((start + end) as u32 / 2), 0, 0, 0]);
 
-            out.update_hash(&self);
+            out.update_hash(self);
 
             out
         }
@@ -171,7 +171,7 @@ impl Board {
             }
 
             out.remove_takeable_empty();
-            out.update_hash(&self);
+            out.update_hash(self);
 
             out
         }

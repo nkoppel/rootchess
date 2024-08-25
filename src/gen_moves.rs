@@ -68,13 +68,11 @@ impl Board {
     }
 
     pub fn get_checks(&self) -> u64 {
-        let cur_occ;
-
-        if self.black {
-            cur_occ = self.black();
+        let cur_occ = if self.black {
+            self.black()
         } else {
-            cur_occ = self.white();
-        }
+            self.white()
+        };
 
         let kingloc = (self.kings() & cur_occ).trailing_zeros() as usize;
 
@@ -280,7 +278,7 @@ fn do_moves(out: &mut Vec<Board>, board: &Board, sq: usize, moves: u64) {
 
         board2.b &= u64x4::splat(!(1 << sq | 1 << sq2));
         board2.b |= piece << (sq2 as u64);
-        board2.update_hash(&board);
+        board2.update_hash(board);
 
         out.push(board2);
     }

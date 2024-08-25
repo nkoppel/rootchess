@@ -349,10 +349,10 @@ impl Searcher {
             moves.sort_by_cached_key(|b| {
                 if Some(b.clone()) == best_move {
                     -1000000
-                } else if board.is_capture(&b) {
-                    -board.eval_see(&b) as i64
+                } else if board.is_capture(b) {
+                    -board.eval_see(b) as i64
                 } else {
-                    let mov = board.get_move(&b, self.c960);
+                    let mov = board.get_move(b, self.c960);
                     let history = self.history[board.black as usize][mov.start()][mov.end()];
 
                     1000000 - history as i64
@@ -385,9 +385,7 @@ impl Searcher {
                 let s = self.alphabeta(board2.clone(), -alpha - 4, -alpha, depth - reduction);
                 self.decr_prev_pos(board.hash);
 
-                if s.is_err() {
-                    return s;
-                }
+                s?;
                 let s = -s.unwrap();
 
                 if s <= alpha {
@@ -400,9 +398,7 @@ impl Searcher {
             let score = self.alphabeta(board2.clone(), -beta, -alpha, depth - reduction);
             self.decr_prev_pos(board.hash);
 
-            if score.is_err() {
-                return score;
-            }
+            score?;
             let score = -score.unwrap();
 
             if score >= cut {
@@ -489,7 +485,7 @@ impl Searcher {
         let mut best_move = None;
         let mut ponder_move = None;
 
-        while let Ok(_) = self.stop.try_recv() {}
+        while self.stop.try_recv().is_ok() {}
         self.gens.clear();
 
         for depth in min_depth..=max_depth {

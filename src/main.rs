@@ -25,12 +25,6 @@ mod uci {
 mod tuning;
 
 use board::*;
-use eval::*;
-use gen_moves::*;
-use gen_tables::*;
-use moves::*;
-use search::*;
-use tt::*;
 use uci::*;
 
 use std::fs::File;

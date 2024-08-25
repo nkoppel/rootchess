@@ -243,7 +243,7 @@ where
 
                 let _ = words.next();
 
-                moves = words.map(|w| Move::from_uci(w)).collect::<Vec<_>>();
+                moves = words.map(Move::from_uci).collect::<Vec<_>>();
 
                 line = lines.next().unwrap().unwrap();
                 words = line.split_whitespace();
@@ -256,7 +256,7 @@ where
                 println!("info string {} 0 0", board2.to_fen(c960));
             }
             Some("domoves") => {
-                moves.extend(words.map(|w| Move::from_uci(w)));
+                moves.extend(words.map(Move::from_uci));
 
                 line = lines.next().unwrap().unwrap();
                 words = line.split_whitespace();
@@ -467,7 +467,7 @@ pub fn perftmanager(ttsize: usize, threads: usize, board: Board, depth: usize) {
     let moves: Vec<_> = generator
         .moves
         .iter()
-        .map(|b| board.get_move(&b, false))
+        .map(|b| board.get_move(b, false))
         .collect();
 
     let moves = Arc::new(Mutex::new(moves));
