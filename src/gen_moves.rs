@@ -164,7 +164,7 @@ impl MoveGenerator {
 
         let mut board = self.board.clone();
         let king = self.board.kings() & self.cur_occ;
-        board.b &= !king;
+        board.b &= u64x4::splat(!king);
 
         let occ = board.occ();
 
@@ -270,13 +270,13 @@ impl MoveGenerator {
 }
 
 fn do_moves(out: &mut Vec<Board>, board: &Board, sq: usize, moves: u64) {
-    let piece = board.b >> (sq as u32) & 1;
+    let piece = board.b >> (sq as u64) & u64x4::splat(1);
 
     for sq2 in LocStack(moves) {
         let mut board2 = board.clone();
 
-        board2.b &= !(1 << sq | 1 << sq2);
-        board2.b |= piece << (sq2 as u32);
+        board2.b &= u64x4::splat(!(1 << sq | 1 << sq2));
+        board2.b |= piece << (sq2 as u64);
         board2.update_hash(&board);
 
         out.push(board2);
@@ -389,7 +389,7 @@ impl MoveGenerator {
                 let mut board = self.board.clone();
                 board.b ^= TABLES.en_pass
                     [self.board.black as usize]
-                    [(te % 8 > sq % 8) as usize] << sq as u32 % 8;
+                    [(te % 8 > sq % 8) as usize] << (sq as u64 % 8);
 
                 if self.get_threats_board(&board, kingloc) == 0 {
                     return true;
@@ -429,7 +429,7 @@ impl MoveGenerator {
         // ========== King Moves ==========
         let moves = TABLES.king[kingloc] & !self.cur_occ & !self.threatened;
         let mut board2 = board.clone();
-        board2.b ^= u64x4::new(0,0,0,board.castling_rooks() & self.cur_occ);
+        board2.b ^= u64x4::from_array([0,0,0,board.castling_rooks() & self.cur_occ]);
         board2.update_hash(&board);
 
         do_moves(&mut self.moves, &board2, kingloc, moves);
@@ -446,7 +446,7 @@ impl MoveGenerator {
             if occ & empty == 0 && self.threatened & threat == 0 {
                 let mut board2 = board.clone();
                 board2.b ^= diff;
-                board2.b ^= u64x4::new(0,0,0,board2.castling_rooks() & self.cur_occ);
+                board2.b ^= u64x4::from_array([0,0,0,board2.castling_rooks() & self.cur_occ]);
                 board2.update_hash(&board);
 
                 self.moves.push(board2);
@@ -474,10 +474,10 @@ impl MoveGenerator {
 
             for sq2 in LocStack(ep_moves) {
                 let mut board2 = board.clone();
-                board2.b |= u64x4::new(pawn_shift(1 << sq),0,0,0);
-                board2.b &= !(1 << sq);
-                board2.b |= u64x4::new(self.board.black as u64,0,0,1)
-                    << (sq2 as u32);
+                board2.b |= u64x4::from_array([pawn_shift(1 << sq),0,0,0]);
+                board2.b &= u64x4::splat(!(1 << sq));
+                board2.b |= u64x4::from_array([self.board.black as u64,0,0,1])
+                    << (sq2 as u64);
                 board2.update_hash(&board);
 
                 self.moves.push(board2);
@@ -504,27 +504,27 @@ impl MoveGenerator {
             moves &= self.pins[sq];
 
             let mut board2 = board.clone();
-            board2.b &= !(1 << sq);
+            board2.b &= u64x4::splat(!(1 << sq));
             board2.update_hash(&board);
 
             for sq2 in LocStack(moves) {
-                let sq2 = sq2 as u32;
+                let sq2 = sq2 as u64;
                 let mut board3 = board2.clone();
-                board3.b &= !(1 << sq2);
+                board3.b &= u64x4::splat(!(1 << sq2));
 
-                board3.b ^= u64x4::new(self.board.black as u64, 1, 0, 0) << sq2;
+                board3.b ^= u64x4::from_array([self.board.black as u64, 1, 0, 0]) << sq2;
                 board3.update_hash(&board2);
                 self.moves.push(board3.clone());
 
-                board3.b ^= u64x4::new(0, 0, 1, 0) << sq2;
+                board3.b ^= u64x4::from_array([0, 0, 1, 0]) << sq2;
                 board3.update_hash(&board2);
                 self.moves.push(board3.clone());
 
-                board3.b ^= u64x4::new(0, 1, 0, 1) << sq2;
+                board3.b ^= u64x4::from_array([0, 1, 0, 1]) << sq2;
                 board3.update_hash(&board2);
                 self.moves.push(board3.clone());
 
-                board3.b ^= u64x4::new(0, 0, 0, 1) << sq2;
+                board3.b ^= u64x4::from_array([0, 0, 0, 1]) << sq2;
                 board3.update_hash(&board2);
                 self.moves.push(board3.clone());
             }
@@ -536,7 +536,7 @@ impl MoveGenerator {
                 let mut board2 = board.clone();
                 board2.b ^= TABLES.en_pass
                     [self.board.black as usize]
-                    [(te % 8 > sq % 8) as usize] << sq as u32 % 8;
+                    [(te % 8 > sq % 8) as usize] << (sq as u64 % 8);
                 board2.update_hash(&board);
                 board2.black ^= true;
 
@@ -575,7 +575,7 @@ impl MoveGenerator {
             moves &= self.pins[sq];
 
             let mut board2 = board.clone();
-            board2.b &= u64x4::new(M,M,M,!(1 << sq));
+            board2.b &= u64x4::from_array([M,M,M,!(1 << sq)]);
             board2.update_hash(&board);
 
             do_moves(&mut self.moves, &board2, sq, moves);
@@ -624,7 +624,7 @@ impl MoveGenerator {
         // ========== King Takes ==========
         let moves = TABLES.king[kingloc] & self.opp_occ & !self.threatened;
         let mut board2 = board.clone();
-        board2.b ^= u64x4::new(0,0,0,board.castling_rooks() & self.cur_occ);
+        board2.b ^= u64x4::from_array([0,0,0,board.castling_rooks() & self.cur_occ]);
         board2.update_hash(&board);
 
         do_moves(&mut self.moves, &board2, kingloc, moves);
@@ -652,27 +652,27 @@ impl MoveGenerator {
             moves &= self.pins[sq];
 
             let mut board2 = board.clone();
-            board2.b &= !(1 << sq);
+            board2.b &= u64x4::splat(!(1 << sq));
             board2.update_hash(&board);
 
             for sq2 in LocStack(moves) {
-                let sq2 = sq2 as u32;
+                let sq2 = sq2 as u64;
                 let mut board3 = board2.clone();
-                board3.b &= !(1 << sq2);
+                board3.b &= u64x4::splat(!(1 << sq2));
 
-                board3.b ^= u64x4::new(self.board.black as u64, 1, 0, 0) << sq2;
+                board3.b ^= u64x4::from_array([self.board.black as u64, 1, 0, 0]) << sq2;
                 board3.update_hash(&board2);
                 self.moves.push(board3.clone());
 
-                board3.b ^= u64x4::new(0, 0, 1, 0) << sq2;
+                board3.b ^= u64x4::from_array([0, 0, 1, 0]) << sq2;
                 board3.update_hash(&board2);
                 self.moves.push(board3.clone());
 
-                board3.b ^= u64x4::new(0, 1, 0, 1) << sq2;
+                board3.b ^= u64x4::from_array([0, 1, 0, 1]) << sq2;
                 board3.update_hash(&board2);
                 self.moves.push(board3.clone());
 
-                board3.b ^= u64x4::new(0, 0, 0, 1) << sq2;
+                board3.b ^= u64x4::from_array([0, 0, 0, 1]) << sq2;
                 board3.update_hash(&board2);
                 self.moves.push(board3.clone());
             }
@@ -684,7 +684,7 @@ impl MoveGenerator {
                 let mut board2 = board.clone();
                 board2.b ^= TABLES.en_pass
                     [self.board.black as usize]
-                    [(te % 8 > sq % 8) as usize] << sq as u32 % 8;
+                    [(te % 8 > sq % 8) as usize] << (sq as u64 % 8);
                 board2.update_hash(&board);
                 board2.black ^= true;
 
@@ -723,7 +723,7 @@ impl MoveGenerator {
             moves &= self.pins[sq];
 
             let mut board2 = board.clone();
-            board2.b &= u64x4::new(M,M,M,!(1 << sq));
+            board2.b &= u64x4::from_array([M,M,M,!(1 << sq)]);
             board2.update_hash(&board);
 
             do_moves(&mut self.moves, &board2, sq, moves);

@@ -1,4 +1,5 @@
 #![feature(test)]
+#![feature(portable_simd)]
 #![feature(get_mut_unchecked)]
 #![allow(dead_code)]
 

@@ -1,4 +1,4 @@
-use packed_simd::*;
+use std::simd::u64x4;
 
 pub const M: u64 = u64::MAX;
 
@@ -219,8 +219,8 @@ pub fn print_board(board: u64) {
 pub fn piece_to_sq(piece: u8) -> u64x4 {
     let mut vec = u64x4::splat(piece as u64);
 
-    vec >>= u64x4::new(3, 2, 1, 0);
-    vec &= 1;
+    vec >>= u64x4::from_array([3, 2, 1, 0]);
+    vec &= u64x4::splat(1);
 
     vec
 }
@@ -271,8 +271,8 @@ fn gen_castle_table() -> Vec<Vec<Vec<(u64, u64, u64x4)>>> {
                 empty &= !(1 << ksq);
                 empty &= !(1 << rsq);
 
-                diff |= king << ksq as u32;
-                diff |= rook_castle << rsq as u32;
+                diff |= king << ksq as u64;
+                diff |= rook_castle << rsq as u64;
                 diff ^= king << 1;
                 diff ^= rook << 2;
             } else if ksq < rsq {
@@ -283,13 +283,13 @@ fn gen_castle_table() -> Vec<Vec<Vec<(u64, u64, u64x4)>>> {
                 empty &= !(1 << ksq);
                 empty &= !(1 << rsq);
 
-                diff |= king << ksq as u32;
-                diff |= rook_castle << rsq as u32;
+                diff |= king << ksq as u64;
+                diff |= rook_castle << rsq as u64;
                 diff ^= king << 5;
                 diff ^= rook << 4;
             }
 
-            let whitediff = diff & u64x4::new(0, M, M, M);
+            let whitediff = diff & u64x4::from_array([0, M, M, M]);
 
             // use crate::board::*;
             // println!("K:{} R:{}", ksq, rsq);

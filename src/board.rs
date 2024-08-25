@@ -1,10 +1,10 @@
 use crate::gen_tables::*;
-pub use packed_simd::*;
+pub use std::simd::{u64x4, num::SimdUint};
 
 macro_rules! gen_line {
     ( $val:ident, $op:tt, 0, 0, 0, 0 ) => {};
     ( $val:ident, $op:tt, $($vec:expr),+ ) => {
-        $val $op u64x4::new($($vec),+);
+        $val $op u64x4::from_array([$($vec),+]);
     };
 }
 
@@ -15,7 +15,7 @@ macro_rules! get_piece {
             let mut vec = self.b;
             gen_line!(vec, |=, $($or_vec),+);
             gen_line!(vec, ^=, $($xor_vec),+);
-            vec.and()
+            vec.reduce_and()
         }
     }
 }
@@ -82,22 +82,22 @@ impl Board {
     pub fn get_piece(&self, piece: u8) -> u64 {
         let mut vec = u64x4::splat(piece as u64);
 
-        vec >>= u64x4::new(3, 2, 1, 0);
-        vec &= 1;
-        vec *= u64::MAX;
+        vec >>= u64x4::from_array([3, 2, 1, 0]);
+        vec &= u64x4::splat(1);
+        vec *= u64x4::splat(u64::MAX);
 
         vec ^= self.b;
-        !vec.or()
+        !vec.reduce_or()
     }
 
     pub fn get_square(&self, sq: u8) -> u8 {
         let mut vec = self.b;
 
-        vec >>= sq as u32;
-        vec &= 1;
-        vec <<= u64x4::new(3, 2, 1, 0);
+        vec >>= u64x4::splat(sq as u64);
+        vec &= u64x4::splat(1);
+        vec <<= u64x4::from_array([3, 2, 1, 0]);
 
-        vec.or() as u8
+        vec.reduce_or() as u8
     }
 
     pub fn to_squarewise(&self) -> Vec<u8> {
@@ -122,7 +122,7 @@ impl Board {
         }
 
         let mut out = Board {
-            b: u64x4::from_slice_unaligned(&out[..]),
+            b: u64x4::from_slice(&out[..]),
             black,
             hash: 0
         };
@@ -305,29 +305,25 @@ impl Board {
 
     pub fn occ(&self) -> u64 {
         let mut vec = self.b;
-        vec &= u64x4::new(0, M, M, M);
-        vec.or()
+        vec &= u64x4::from_array([0, M, M, M]);
+        vec.reduce_or()
     }
 
     pub fn black(&self) -> u64 {
-        unsafe {
-            self.occ() & self.b.extract_unchecked(0)
-        }
+        self.occ() & self.b[0]
     }
 
     pub fn white(&self) -> u64 {
-        unsafe {
-            self.occ() & !self.b.extract_unchecked(0)
-        }
+        self.occ() & !self.b[0]
     }
 
     pub fn remove_takeable_empty(&mut self) {
-        self.b &= !self.takeable_empties();
+        self.b &= u64x4::splat(!self.takeable_empties());
     }
 
     pub fn all_pawns(&self) -> Board {
         let mut out = Board {
-            b: u64x4::new(self.black_pawns(), 0, 0, self.pawns()),
+            b: u64x4::from_array([self.black_pawns(), 0, 0, self.pawns()]),
             black: self.black,
             hash: 0
         };
@@ -373,7 +369,7 @@ impl Hasher {
         let mut hash = 0;
 
         for i in 0..4 {
-            for j in LocStack(unsafe{bits.extract_unchecked(i)}) {
+            for j in LocStack(bits[i]) {
                 hash ^= self.bits[i][j];
             }
         }

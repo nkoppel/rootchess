@@ -360,7 +360,7 @@ impl Board {
 
     pub fn eval_mvv_lva(&self, mov: &Board) -> i32 {
         let mut board = self.clone();
-        board.b &= !(self.b ^ mov.b).or();
+        board.b &= u64x4::splat(!(self.b ^ mov.b).reduce_or());
         board.eval_material(&PARAMS)
     }
 

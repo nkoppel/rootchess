@@ -90,7 +90,7 @@ impl Board {
             out.b ^= TABLES.en_pass
                 [self.black as usize]
                 [(end % 8 > start % 8) as usize]
-                    << start as u32 % 8;
+                    << (start as u64 % 8);
 
             out.update_hash(&self);
 
@@ -103,7 +103,7 @@ impl Board {
         {
             out.b ^= TABLES.castles[self.black as usize][start % 8][end % 8].2;
 
-            out.b ^= u64x4::new(0,0,0,out.castling_rooks() & cur_occ);
+            out.b ^= u64x4::from_array([0,0,0,out.castling_rooks() & cur_occ]);
 
             out.remove_takeable_empty();
             out.update_hash(&self);
@@ -117,7 +117,7 @@ impl Board {
             let end = if end > start {7} else {0};
             out.b ^= TABLES.castles[self.black as usize][start % 8][end % 8].2;
 
-            out.b ^= u64x4::new(0,0,0,out.castling_rooks() & cur_occ);
+            out.b ^= u64x4::from_array([0,0,0,out.castling_rooks() & cur_occ]);
 
             out.remove_takeable_empty();
             out.update_hash(&self);
@@ -128,13 +128,13 @@ impl Board {
         else if self.pawns() & 1 << start != 0 &&
             (start as isize - end as isize).abs() == 16
         {
-            let piece = self.b >> start as u32 & 1;
+            let piece = self.b >> u64x4::splat(start as u64) & u64x4::splat(1);
 
             out.remove_takeable_empty();
 
-            out.b &= !(1 << start);
-            out.b |= piece << end as u32;
-            out.b |= u64x4::new(1,0,0,0) << (start + end) as u32 / 2;
+            out.b &= u64x4::splat(!(1 << start));
+            out.b |= piece << end as u64;
+            out.b |= u64x4::from_array([1 << ((start + end) as u32 / 2),0,0,0]);
 
             out.update_hash(&self);
 
@@ -142,7 +142,7 @@ impl Board {
         }
         // Other moves
         else {
-            let mut sq = self.b >> start as u32 & 1;
+            let mut sq = self.b >> start as u64 & u64x4::splat(1u64);
 
             if piece != 0 {
                 let mut p = piece;
@@ -155,16 +155,16 @@ impl Board {
             }
 
             if self.castling_rooks() & 1 << start != 0 {
-                sq ^= u64x4::new(0,0,0,1);
+                sq ^= u64x4::from_array([0,0,0,1]);
             }
 
-            out.b &= !(1 << start | 1 << end);
-            out.b |= sq << end as u32;
+            out.b &= u64x4::splat(!(1 << start | 1 << end));
+            out.b |= sq << end as u64;
 
             if self.kings() & 1 << start != 0 {
                 let cur_occ = if self.black {self.black()} else {self.white()};
 
-                out.b ^= u64x4::new(0,0,0,self.castling_rooks() & cur_occ);
+                out.b ^= u64x4::from_array([0,0,0,self.castling_rooks() & cur_occ]);
             }
 
             out.remove_takeable_empty();
@@ -185,10 +185,10 @@ impl Board {
 
             let board_diff = s.b ^ o.b;
 
-            s.b ^= u64x4::new(0,0,0, s.castling_rooks());
-            o.b ^= u64x4::new(0,0,0, o.castling_rooks());
+            s.b ^= u64x4::from_array([0,0,0, s.castling_rooks()]);
+            o.b ^= u64x4::from_array([0,0,0, o.castling_rooks()]);
 
-            (board_diff, (s.b ^ o.b).or())
+            (board_diff, (s.b ^ o.b).reduce_or())
         };
 
         let mut castle = 64;
@@ -198,7 +198,7 @@ impl Board {
             for rook in LocStack(self.castling_rooks() & cur_occ) {
                 let expected_diff = TABLES.castles[self.black as usize][king_start % 8][rook % 8].2;
 
-                if board_diff & expected_diff.or() == expected_diff {
+                if board_diff & u64x4::splat(expected_diff.reduce_or()) == expected_diff {
                     castle = rook;
                     break;
                 }
@@ -229,7 +229,7 @@ impl Board {
             let end   = (diff & !cur_occ).trailing_zeros() as usize;
             let mut piece = 0;
 
-            if (self.b >> start as u32) & 1 != (other.b >> end as u32) & 1 && 
+            if (self.b >> start as u64) & u64x4::splat(1) != (other.b >> end as u64) & u64x4::splat(1) && 
                 self.rooks() & 1 << start == 0
             {
                 piece = other.get_square(end as u8) as usize;
@@ -247,10 +247,10 @@ impl Board {
             s.remove_takeable_empty();
             o.remove_takeable_empty();
 
-            s.b ^= u64x4::new(0,0,0, s.castling_rooks());
-            o.b ^= u64x4::new(0,0,0, o.castling_rooks());
+            s.b ^= u64x4::from_array([0,0,0, s.castling_rooks()]);
+            o.b ^= u64x4::from_array([0,0,0, o.castling_rooks()]);
 
-            (s.b ^ o.b).or()
+            (s.b ^ o.b).reduce_or()
         };
 
         self.occ() & diff == diff &&
